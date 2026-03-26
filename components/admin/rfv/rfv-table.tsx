@@ -5,6 +5,7 @@ import { ChevronUp, ChevronDown } from "lucide-react"
 import type { ClientRfv, RfvSegment } from "@/lib/rfv"
 import { SEGMENT_COLORS, RFV_SCORE_COLOR } from "@/lib/rfv"
 import { RfvClientDrawer } from "./rfv-client-drawer"
+import { Button } from "@/components/ui/button"
 
 type SortKey = "clientName" | "recency" | "frequency" | "monetary" | "score" | "totalValue" | "lastPurchaseDate"
 
@@ -26,11 +27,15 @@ export function RfvTable({ clients }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>("score")
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc")
   const [selected, setSelected] = useState<ClientRfv | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 20
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"))
     else { setSortKey(key); setSortDir("desc") }
   }
+
+  const totalPages = Math.ceil(clients.length / itemsPerPage)
 
   const sorted = [...clients].sort((a, b) => {
     let av: string | number = a[sortKey] as string | number
@@ -40,6 +45,8 @@ export function RfvTable({ clients }: Props) {
     }
     return sortDir === "asc" ? (av as number) - (bv as number) : (bv as number) - (av as number)
   })
+
+  const paginatedData = sorted.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
 
   function SortIcon({ k }: { k: SortKey }) {
     if (sortKey !== k) return <ChevronUp className="h-3 w-3 opacity-30" />
@@ -79,7 +86,7 @@ export function RfvTable({ clients }: Props) {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {sorted.map((c) => {
+              {paginatedData.map((c) => {
                 const colors = SEGMENT_COLORS[c.segment]
                 return (
                   <tr
@@ -116,6 +123,13 @@ export function RfvTable({ clients }: Props) {
               })}
             </tbody>
           </table>
+        </div>
+      </div>
+      <div className="flex items-center justify-between mt-4">
+        <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages}</span>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>Anterior</Button>
+          <Button variant="outline" size="sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)}>Próxima</Button>
         </div>
       </div>
 
