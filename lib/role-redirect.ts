@@ -4,16 +4,16 @@
  */
 export type UserRole = "admin" | "bdr_admin" | "user" | "bdr_user"
 
-export function getHomeByRole(role: UserRole | string | null, slug?: string | null): string {
+export function getHomeByRole(role: UserRole | string | null, _slug?: string | null): string {
   switch (role) {
     case "admin":
       return "/admin/dashboard"
     case "bdr_admin":
-      return "/admin/bdr"
+      return "/admin/tools/bdr"
     case "bdr_user":
-      return slug ? `/${slug}/bdr` : "/portal/bdr"
+      return "/portal/bdr"
     case "user":
     default:
-      return slug ? `/${slug}/dashboard` : "/portal/dashboard"
+      return "/portal/dashboard"
   }
 }
