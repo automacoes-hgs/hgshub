@@ -20,32 +20,40 @@ export function DashboardFiltersReal({
 }: DashboardFiltersRealProps) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-          <Filter className="h-4 w-4" />
-          <span>Filtrar por cliente:</span>
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <Filter className="h-3.5 w-3.5" />
+          <span>Cliente:</span>
         </div>
         <Select value={selectedClient} onValueChange={onClientChange}>
-          <SelectTrigger className="h-8 w-auto min-w-[200px] text-sm border-border bg-muted/40">
+          <SelectTrigger className="h-8 w-auto min-w-[200px] text-sm border-border bg-background">
             <SelectValue placeholder="Todos os clientes" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos os clientes</SelectItem>
-            {clientNames.map((name) => (
+            {clientNames.sort((a, b) => a.localeCompare(b, "pt-BR")).map((name) => (
               <SelectItem key={name} value={name}>{name}</SelectItem>
             ))}
           </SelectContent>
         </Select>
+        {selectedClient !== "all" && (
+          <button
+            onClick={() => onClientChange("all")}
+            className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
+          >
+            Limpar
+          </button>
+        )}
       </div>
 
-      <div className="flex items-center gap-4 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1.5">
+      <div className="flex items-center gap-4 text-xs text-muted-foreground divide-x divide-border">
+        <span className="flex items-center gap-1.5 pr-4">
           <Users className="h-3.5 w-3.5" />
-          {totalClients} clientes únicos
+          <span><strong className="text-foreground font-semibold">{totalClients}</strong> clientes</span>
         </span>
-        <span className="flex items-center gap-1.5">
+        <span className="flex items-center gap-1.5 pl-4">
           <FileText className="h-3.5 w-3.5" />
-          {totalContracts} contratos
+          <span><strong className="text-foreground font-semibold">{totalContracts}</strong> contratos</span>
         </span>
       </div>
     </div>

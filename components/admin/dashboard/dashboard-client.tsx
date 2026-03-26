@@ -34,6 +34,14 @@ export function DashboardClient({ contracts, clientsRfv, clientsHealth }: Dashbo
 
   return (
     <div className="flex flex-col gap-6 pb-10">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">Dashboard Geral</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Visão estratégica da carteira de clientes
+        </p>
+      </div>
+
       <DashboardFiltersReal
         clientNames={clientsHealth.map((c) => c.clientName)}
         selectedClient={selectedClient}

@@ -30,11 +30,12 @@ export function DashboardOverviewReal({ contracts, clientsRfv, clientsHealth }: 
   const alerts = generateAlerts(clientsHealth)
 
   return (
-    <div className="flex flex-col gap-6">
-      <section>
-        <div className="flex items-baseline gap-2 mb-3">
-          <h2 className="text-sm font-semibold text-foreground">Receita</h2>
-          <span className="text-xs text-muted-foreground">dados reais dos contratos</span>
+    <div className="flex flex-col gap-8">
+      {/* Receita */}
+      <section className="flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold text-foreground">Receita</h2>
+          <span className="text-xs text-muted-foreground">calculado com base nos contratos ativos</span>
         </div>
         <RevenueKpiCards
           mrr={mrr}
@@ -44,18 +45,18 @@ export function DashboardOverviewReal({ contracts, clientsRfv, clientsHealth }: 
           revenueAtRisk={revenueAtRisk}
           atRiskCount={atRisk.length}
         />
-        <div className="mt-4">
-          <RevenueChartsReal contracts={contracts} clientsRfv={clientsRfv} clientsHealth={clientsHealth} />
-        </div>
+        <RevenueChartsReal contracts={contracts} clientsRfv={clientsRfv} clientsHealth={clientsHealth} />
       </section>
 
-      <section>
-        <h2 className="text-sm font-semibold text-foreground mb-3">Saúde dos clientes</h2>
+      {/* Saúde */}
+      <section className="flex flex-col gap-4">
+        <h2 className="text-base font-semibold text-foreground">Saúde dos clientes</h2>
         <HealthSectionReal clientsHealth={clientsHealth} />
       </section>
 
-      <section>
-        <h2 className="text-sm font-semibold text-foreground mb-3">Alertas e risco de churn</h2>
+      {/* Alertas */}
+      <section className="flex flex-col gap-4">
+        <h2 className="text-base font-semibold text-foreground">Alertas de churn</h2>
         <ChurnAlertsReal alerts={alerts} />
       </section>
     </div>

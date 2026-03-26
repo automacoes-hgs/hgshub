@@ -28,26 +28,28 @@ export function HealthSectionReal({ clientsHealth }: HealthSectionRealProps) {
       <div className="grid grid-cols-3 gap-4">
         {groups.map((g) => (
           <Card key={g.label} className="border-border bg-card">
-            <CardContent className="pt-4 pb-4 flex flex-col items-center text-center gap-1">
-              <span className={cn("h-2.5 w-2.5 rounded-full mb-1", g.cfg.dot)} />
-              <p className="text-2xl font-bold text-foreground">{g.count}</p>
-              <p className="text-xs text-muted-foreground">{g.label}</p>
-              <p className={cn("text-xs font-medium", g.cfg.text)}>{g.pct}%</p>
+            <CardContent className="pt-5 pb-5 flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-muted-foreground">{g.label}</span>
+                <span className={cn("h-2 w-2 rounded-full", g.cfg.dot)} />
+              </div>
+              <p className={cn("text-3xl font-bold tracking-tight", g.cfg.text)}>{g.count}</p>
+              <p className="text-xs text-muted-foreground">{g.pct}% da base</p>
             </CardContent>
           </Card>
         ))}
       </div>
 
       {/* Barra de distribuição */}
-      <div className="h-3 rounded-full overflow-hidden flex bg-muted">
+      <div className="h-2 rounded-full overflow-hidden flex bg-muted">
         {pctHealthy > 0 && <div className="bg-emerald-500 transition-all" style={{ width: `${pctHealthy}%` }} />}
         {pctAttention > 0 && <div className="bg-amber-400 transition-all" style={{ width: `${pctAttention}%` }} />}
         {pctRisk > 0 && <div className="bg-red-500 transition-all" style={{ width: `${pctRisk}%` }} />}
       </div>
-      <div className="flex justify-between text-xs text-muted-foreground">
-        <span className="text-emerald-600">{pctHealthy}% saudável</span>
-        <span className="text-amber-500">{pctAttention}% atenção</span>
-        <span className="text-red-500">{pctRisk}% em risco</span>
+      <div className="flex gap-4 text-xs text-muted-foreground">
+        <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />{pctHealthy}% saudável</span>
+        <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-amber-400" />{pctAttention}% atenção</span>
+        <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-red-500" />{pctRisk}% em risco</span>
       </div>
     </div>
   )

@@ -69,14 +69,14 @@ export function RevenueChartsReal({ contracts, clientsRfv, clientsHealth }: Reve
               />
               <Tooltip
                 formatter={(v: number) => [fmtK(v), "Receita/mês"]}
-                contentStyle={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 6, fontSize: 12 }}
+                contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12 }}
                 labelFormatter={(_, payload) => payload?.[0]?.payload?.full ?? ""}
-                labelStyle={{ color: "#e2e8f0" }}
-                itemStyle={{ color: "#93c5fd" }}
+                labelStyle={{ color: "var(--foreground)" }}
+                itemStyle={{ color: "var(--color-chart-1)" }}
               />
-              <Bar dataKey="value" radius={[0, 4, 4, 0]} label={{ position: "right", fill: "#94a3b8", fontSize: 11, formatter: fmtK }}>
+              <Bar dataKey="value" radius={[0, 4, 4, 0]} label={{ position: "right", fill: "var(--muted-foreground)", fontSize: 11, formatter: fmtK }}>
                 {rankingData.map((_, i) => (
-                  <Cell key={i} fill="#185FA5" opacity={1 - i * 0.1} />
+                  <Cell key={i} fill="var(--color-chart-1)" opacity={1 - i * 0.08} />
                 ))}
               </Bar>
             </BarChart>
@@ -99,8 +99,8 @@ export function RevenueChartsReal({ contracts, clientsRfv, clientsHealth }: Reve
               </Pie>
               <Tooltip
                 formatter={(v: number, name: string) => [`${v} cliente${v !== 1 ? "s" : ""}`, name]}
-                contentStyle={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 6, fontSize: 12 }}
-                labelStyle={{ color: "#e2e8f0" }}
+                contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12 }}
+                labelStyle={{ color: "var(--foreground)" }}
               />
               <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, color: "#94a3b8" }} />
             </PieChart>

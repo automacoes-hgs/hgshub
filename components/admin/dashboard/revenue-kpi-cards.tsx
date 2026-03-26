@@ -15,54 +15,62 @@ function fmt(value: number) {
 }
 
 export function RevenueKpiCards({
-  mrr,
-  avgTicket,
-  activeClients,
-  totalClients,
-  revenueAtRisk,
-  atRiskCount,
+  mrr, avgTicket, activeClients, totalClients, revenueAtRisk, atRiskCount,
 }: RevenueKpiCardsProps) {
+  const cards = [
+    {
+      icon: DollarSign,
+      label: "Receita Total",
+      value: fmt(mrr),
+      sub: "soma dos contratos ativos",
+      accent: "text-blue-600",
+      iconBg: "bg-blue-50 dark:bg-blue-950/40",
+    },
+    {
+      icon: TrendingUp,
+      label: "Ticket Médio",
+      value: fmt(avgTicket),
+      sub: "por cliente ativo",
+      accent: "text-emerald-600",
+      iconBg: "bg-emerald-50 dark:bg-emerald-950/40",
+    },
+    {
+      icon: Users,
+      label: "Clientes Ativos",
+      value: String(activeClients),
+      sub: `de ${totalClients} cadastrados`,
+      accent: "text-primary",
+      iconBg: "bg-primary/10",
+    },
+    {
+      icon: AlertTriangle,
+      label: "Receita em Risco",
+      value: fmt(revenueAtRisk),
+      sub: `${atRiskCount} cliente${atRiskCount !== 1 ? "s" : ""} em risco`,
+      accent: "text-amber-600",
+      iconBg: "bg-amber-50 dark:bg-amber-950/40",
+    },
+  ]
+
   return (
     <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-      {/* MRR Total */}
-      <Card className="border border-blue-800/60 bg-blue-950/50">
-        <CardContent className="pt-4 pb-4 flex flex-col items-center text-center gap-1">
-          <DollarSign className="h-4 w-4 text-blue-400 mb-1" />
-          <p className="text-xs text-blue-400 font-medium">MRR total</p>
-          <p className="text-xl font-bold text-blue-200">{fmt(mrr)}</p>
-          <p className="text-xs text-blue-400">↑ 12% vs mês ant.</p>
-        </CardContent>
-      </Card>
-
-      {/* Ticket médio */}
-      <Card className="border border-emerald-800/60 bg-emerald-950/50">
-        <CardContent className="pt-4 pb-4 flex flex-col items-center text-center gap-1">
-          <TrendingUp className="h-4 w-4 text-emerald-400 mb-1" />
-          <p className="text-xs text-emerald-400 font-medium">Ticket médio</p>
-          <p className="text-xl font-bold text-emerald-200">{fmt(avgTicket)}</p>
-          <p className="text-xs text-emerald-400">por cliente</p>
-        </CardContent>
-      </Card>
-
-      {/* Clientes ativos */}
-      <Card className="border border-lime-800/60 bg-lime-950/50">
-        <CardContent className="pt-4 pb-4 flex flex-col items-center text-center gap-1">
-          <Users className="h-4 w-4 text-lime-400 mb-1" />
-          <p className="text-xs text-lime-400 font-medium">Clientes ativos</p>
-          <p className="text-xl font-bold text-lime-200">{activeClients}</p>
-          <p className="text-xs text-lime-400">de {totalClients} cadastrados</p>
-        </CardContent>
-      </Card>
-
-      {/* Receita em risco */}
-      <Card className="border border-amber-800/60 bg-amber-950/50">
-        <CardContent className="pt-4 pb-4 flex flex-col items-center text-center gap-1">
-          <AlertTriangle className="h-4 w-4 text-amber-400 mb-1" />
-          <p className="text-xs text-amber-400 font-medium">Receita em risco</p>
-          <p className="text-xl font-bold text-amber-200">{fmt(revenueAtRisk)}</p>
-          <p className="text-xs text-amber-400">{atRiskCount} cliente{atRiskCount !== 1 ? "s" : ""} em risco</p>
-        </CardContent>
-      </Card>
+      {cards.map((c) => {
+        const Icon = c.icon
+        return (
+          <Card key={c.label} className="border-border bg-card">
+            <CardContent className="pt-5 pb-5 flex flex-col gap-3">
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${c.iconBg}`}>
+                <Icon className={`h-4 w-4 ${c.accent}`} />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">{c.label}</p>
+                <p className={`text-2xl font-bold tracking-tight mt-0.5 ${c.accent}`}>{c.value}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{c.sub}</p>
+              </div>
+            </CardContent>
+          </Card>
+        )
+      })}
     </div>
   )
 }
