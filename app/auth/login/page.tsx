@@ -33,7 +33,10 @@ export default function LoginPage() {
       return
     }
 
-    router.push("/admin/dashboard")
+    // Consulta o role para redirecionar para a rota correta de cada nível de acesso
+    const res = await fetch("/api/auth/me")
+    const { redirect } = await res.json()
+    router.push(redirect ?? "/auth/login")
     router.refresh()
   }
 

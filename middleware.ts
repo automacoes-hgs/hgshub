@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { type NextRequest, NextResponse } from 'next/server'
+import { getHomeByRole } from '@/lib/role-redirect'
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -28,21 +29,48 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // getSession lê do cookie (sem roundtrip de rede) — evita rate limit do Supabase Auth
-  // getUser() fica reservado apenas para validação segura no lado do servidor (Server Components)
+  // getSession lê do cookie sem roundtrip — evita rate limit do Supabase Auth
   const { data: { session } } = await supabase.auth.getSession()
   const user = session?.user ?? null
 
+  // Rota de auth → já logado: redireciona para a API que resolve o destino por role
+  if (isAuthRoute && user) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/api/auth/me'
+    // Não podemos aguardar a API aqui — usamos o redirect para a raiz
+    // que por sua vez consulta o role via app/route.ts
+    url.pathname = '/'
+    return NextResponse.redirect(url)
+  }
+
+  // Área portal (clientes) → não logado: redireciona para login
+  if (pathname.startsWith('/portal') && !user) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/auth/login'
+    return NextResponse.redirect(url)
+  }
+
+  // Área admin → não logado: redireciona para login
   if (pathname.startsWith('/admin') && !user) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
     return NextResponse.redirect(url)
   }
 
-  if (isAuthRoute && user) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/admin/dashboard'
-    return NextResponse.redirect(url)
+  // Área admin → logado mas sem role admin/bdr_admin: busca o profile e redireciona
+  if (pathname.startsWith('/admin') && user) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role, slug')
+      .eq('id', user.id)
+      .single()
+
+    const role = profile?.role ?? 'user'
+    if (role !== 'admin' && role !== 'bdr_admin') {
+      const url = request.nextUrl.clone()
+      url.pathname = getHomeByRole(role, profile?.slug)
+      return NextResponse.redirect(url)
+    }
   }
 
   return supabaseResponse

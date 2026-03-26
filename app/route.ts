@@ -1,14 +1,25 @@
 import { createClient } from "@/lib/supabase/server"
 import { type NextRequest, NextResponse } from "next/server"
+import { getHomeByRole } from "@/lib/role-redirect"
 
 /**
- * Rota raiz: redireciona para /admin/dashboard ou /auth/login
- * Usa NextResponse.redirect (HTTP 302) em vez de redirect() do next/navigation
- * para evitar "Router action dispatched before initialization" no preview do Next.js.
+ * Rota raiz: redireciona para a home correta de acordo com o role do usuário.
+ * Usa NextResponse.redirect (HTTP 302) — redirect puro sem envolver o router do cliente.
  */
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const destination = user ? "/admin/dashboard" : "/auth/login"
+
+  if (!user) {
+    return NextResponse.redirect(new URL("/auth/login", request.url))
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role, slug")
+    .eq("id", user.id)
+    .single()
+
+  const destination = getHomeByRole(profile?.role ?? "user", profile?.slug)
   return NextResponse.redirect(new URL(destination, request.url))
 }
