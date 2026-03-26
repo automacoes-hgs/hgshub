@@ -144,7 +144,10 @@ function parseAndValidateRow(raw: Record<string, string>, index: number, type: I
   if (!purchase_date) errors.push(`Data inválida: "${rawDate}"`)
 
   const rawValue = resolveColumn(raw, "value").replace(",", ".")
-  const value = parseFloat(rawValue) || 0
+  const valueParsed = parseFloat(rawValue)
+  // Valor zero é permitido (bônus/cortesia) — apenas rejeitar quando NaN e campo vazio
+  const value = isNaN(valueParsed) ? 0 : valueParsed
+  const valueProvided = rawValue.trim() !== "" && !isNaN(valueParsed)
 
   const payment_method = normalizePayment(resolveColumn(raw, "payment_method"))
   const notes = resolveColumn(raw, "notes") || undefined
@@ -156,15 +159,18 @@ function parseAndValidateRow(raw: Record<string, string>, index: number, type: I
   if (type === "produto") {
     const rawQty = resolveColumn(raw, "qty").replace(",", ".")
     const rawUnit = resolveColumn(raw, "unit_price").replace(",", ".")
-    qty = parseFloat(rawQty) || undefined
-    unit_price = parseFloat(rawUnit) || undefined
-    if (qty && unit_price) {
+    const qtyParsed = parseFloat(rawQty)
+    const unitParsed = parseFloat(rawUnit)
+    qty = isNaN(qtyParsed) ? undefined : qtyParsed
+    unit_price = isNaN(unitParsed) ? undefined : unitParsed
+    if (qty !== undefined && unit_price !== undefined) {
       computedValue = qty * unit_price
-    } else if (!value && (!qty || !unit_price)) {
-      errors.push("Para produto: informe (qty + unit_price) ou valor total")
+    } else if (!valueProvided && (qty === undefined || unit_price === undefined)) {
+      errors.push("Para produto: informe (qty + unit_price) ou valor total (pode ser 0 para bônus)")
     }
   } else {
-    if (!value) errors.push("Valor obrigatório para serviço")
+    // Serviço: valor zero é válido (bônus/cortesia); só erro se campo totalmente ausente
+    if (!valueProvided) errors.push("Valor obrigatório para serviço (use 0 para bônus)")
   }
 
   return {
