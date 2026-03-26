@@ -29,35 +29,30 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // getSession lê do cookie sem roundtrip — evita rate limit do Supabase Auth
-  const { data: { session } } = await supabase.auth.getSession()
-  const user = session?.user ?? null
+  // getUser() valida o token junto ao Supabase Auth — seguro e correto
+  const { data: { user } } = await supabase.auth.getUser()
 
-  // Rota de auth → já logado: redireciona para a API que resolve o destino por role
+  const redirect = (path: string) => {
+    const url = request.nextUrl.clone()
+    url.pathname = path
+    return NextResponse.redirect(url)
+  }
+
+  // Rotas protegidas sem sessão → login
+  const isProtected = pathname.startsWith('/admin') || pathname.startsWith('/portal')
+  if (isProtected && !user) return redirect('/auth/login')
+
+  // Rotas de auth com sessão ativa → destino por role (sem passar pela raiz)
   if (isAuthRoute && user) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/api/auth/me'
-    // Não podemos aguardar a API aqui — usamos o redirect para a raiz
-    // que por sua vez consulta o role via app/route.ts
-    url.pathname = '/'
-    return NextResponse.redirect(url)
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role, slug')
+      .eq('id', user.id)
+      .single()
+    return redirect(getHomeByRole(profile?.role ?? 'user', profile?.slug))
   }
 
-  // Área portal (clientes) → não logado: redireciona para login
-  if (pathname.startsWith('/portal') && !user) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/auth/login'
-    return NextResponse.redirect(url)
-  }
-
-  // Área admin → não logado: redireciona para login
-  if (pathname.startsWith('/admin') && !user) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/auth/login'
-    return NextResponse.redirect(url)
-  }
-
-  // Área admin → logado mas sem role admin/bdr_admin: busca o profile e redireciona
+  // Área admin → logado com role insuficiente → destino correto
   if (pathname.startsWith('/admin') && user) {
     const { data: profile } = await supabase
       .from('profiles')
@@ -67,9 +62,7 @@ export async function middleware(request: NextRequest) {
 
     const role = profile?.role ?? 'user'
     if (role !== 'admin' && role !== 'bdr_admin') {
-      const url = request.nextUrl.clone()
-      url.pathname = getHomeByRole(role, profile?.slug)
-      return NextResponse.redirect(url)
+      return redirect(getHomeByRole(role, profile?.slug))
     }
   }
 
