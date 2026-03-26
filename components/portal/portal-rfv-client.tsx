@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation"
 import {
   TrendingUp, Users, DollarSign, Star, AlertTriangle, UserCheck,
   Plus, Pencil, Trash2, Search, Package, FileBarChart2, ChevronDown,
-  Target, BarChart3, PieChartIcon, ArrowUpRight
+  Target, BarChart3, PieChartIcon, ArrowUpRight, Upload
 } from "lucide-react"
+import { PortalRfvImport } from "./portal-rfv-import"
 import { createClient } from "@/lib/supabase/client"
 import { useToast } from "@/hooks/use-toast"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -102,6 +103,17 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
   const [editProduct, setEditProduct] = useState<Product | null>(null)
   const [productForm, setProductForm] = useState<ProductForm>(EMPTY_PRODUCT)
   const [productLoading, setProductLoading] = useState(false)
+
+  // Importação
+  const [importModal, setImportModal] = useState(false)
+  function handleImported(newEntries: typeof entries, newProducts: typeof products) {
+    setEntries((prev) => [...newEntries, ...prev])
+    setProducts((prev) => {
+      const existingIds = new Set(prev.map((p) => p.id))
+      return [...prev, ...newProducts.filter((p) => !existingIds.has(p.id))]
+    })
+    startTransition(() => router.refresh())
+  }
 
   // ── RFV computed ────────────────────────────────────────────────────────────
   const rfvClients = useMemo(() => computePortalRfv(entries), [entries])
@@ -510,9 +522,14 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input placeholder="Buscar cliente ou produto..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
-            <Button onClick={openEntryCreate} className="gap-2">
-              <Plus className="h-4 w-4" /> Nova Transação
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={() => setImportModal(true)} className="gap-2">
+                <Upload className="h-4 w-4" /> Importar
+              </Button>
+              <Button onClick={openEntryCreate} className="gap-2">
+                <Plus className="h-4 w-4" /> Nova Transação
+              </Button>
+            </div>
           </div>
 
           {filteredEntries.length === 0 ? (
@@ -608,6 +625,15 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
           )}
         </div>
       )}
+
+      {/* ── MODAL IMPORTAÇÃO ──────────────────────────────────────────────────── */}
+      <PortalRfvImport
+        ownerId={ownerId}
+        products={products}
+        open={importModal}
+        onClose={() => setImportModal(false)}
+        onImported={handleImported}
+      />
 
       {/* ── MODAL ENTRADA ─────────────────────────────────────────────────────── */}
       <Dialog open={entryModal} onOpenChange={setEntryModal}>
