@@ -140,39 +140,44 @@ export function UsersClient({ profiles, tools }: UsersClientProps) {
     admins: profiles.filter((p) => p.role === "admin").length,
   }
 
+  async function callAdminApi(body: Record<string, unknown>) {
+    const res = await fetch("/api/admin/users/update", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error ?? "Erro desconhecido")
+    return data
+  }
+
   async function handleApprove(userId: string) {
-    const { error } = await supabase
-      .from("profiles")
-      .update({ approved_at: new Date().toISOString() })
-      .eq("id", userId)
-    if (error) {
-      toast({ title: "Erro ao aprovar", description: error.message, variant: "destructive" })
-    } else {
+    try {
+      await callAdminApi({ action: "approve", userId })
       toast({ title: "Usuário aprovado com sucesso" })
       startTransition(() => router.refresh())
+    } catch (err: unknown) {
+      toast({ title: "Erro ao aprovar", description: err instanceof Error ? err.message : "Erro", variant: "destructive" })
     }
   }
 
   async function handleRoleChange(userId: string, role: UserRole) {
-    const { error } = await supabase.from("profiles").update({ role }).eq("id", userId)
-    if (error) {
-      toast({ title: "Erro ao alterar role", description: error.message, variant: "destructive" })
-    } else {
+    try {
+      await callAdminApi({ action: "role", userId, role })
       toast({ title: "Nível de acesso atualizado" })
       startTransition(() => router.refresh())
+    } catch (err: unknown) {
+      toast({ title: "Erro ao alterar role", description: err instanceof Error ? err.message : "Erro", variant: "destructive" })
     }
   }
 
   async function handleToolToggle(userId: string, tool: ToolKey, enabled: boolean) {
-    const { error } = await supabase.from("user_tools").upsert(
-      { user_id: userId, tool, enabled, enabled_at: enabled ? new Date().toISOString() : null },
-      { onConflict: "user_id,tool" }
-    )
-    if (error) {
-      toast({ title: "Erro ao alterar ferramenta", description: error.message, variant: "destructive" })
-    } else {
+    try {
+      await callAdminApi({ action: "tool", userId, tool, enabled })
       toast({ title: enabled ? "Ferramenta habilitada" : "Ferramenta desabilitada" })
       startTransition(() => router.refresh())
+    } catch (err: unknown) {
+      toast({ title: "Erro ao alterar ferramenta", description: err instanceof Error ? err.message : "Erro", variant: "destructive" })
     }
   }
 

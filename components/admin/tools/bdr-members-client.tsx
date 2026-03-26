@@ -5,7 +5,7 @@ import { Plus, UserCheck, UserX } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { createClient } from "@/lib/supabase/client"
@@ -108,7 +108,10 @@ export function BdrMembersClient({ members: initialMembers }: BdrMembersClientPr
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Adicionar BDR</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Adicionar BDR</DialogTitle>
+            <DialogDescription>Preencha os dados do novo BDR para adicioná-lo à equipe.</DialogDescription>
+          </DialogHeader>
           <div className="flex flex-col gap-4 py-2">
             <div className="flex flex-col gap-1.5">
               <Label>Nome</Label>

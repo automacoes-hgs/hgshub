@@ -5,7 +5,7 @@ import { Plus, Pencil } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -154,7 +154,10 @@ export function BdrGoalsClient({ members, goals: initialGoals }: BdrGoalsClientP
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>Definir Meta Mensal</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Definir Meta Mensal</DialogTitle>
+            <DialogDescription>Configure os valores de meta para o BDR e mês selecionados.</DialogDescription>
+          </DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-2">
             <div className="col-span-2 flex flex-col gap-1.5">
               <Label>BDR</Label>

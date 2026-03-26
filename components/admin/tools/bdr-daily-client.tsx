@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -208,6 +208,7 @@ export function BdrDailyClient({ members, logs: initialLogs }: BdrDailyClientPro
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Registrar Lançamento Diário</DialogTitle>
+            <DialogDescription>Preencha os dados do dia para o BDR selecionado.</DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-2">
             <div className="col-span-2 flex flex-col gap-1.5">
