@@ -1,7 +1,6 @@
 "use client"
 
 import Link from "next/link"
-import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
 import {
   LayoutDashboard,
@@ -10,6 +9,7 @@ import {
   PieChart,
   Settings,
   LogOut,
+  Briefcase,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
@@ -21,7 +21,7 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { label: "Dashboard Geral", href: "/admin", icon: LayoutDashboard },
+  { label: "Dashboard Geral", href: "/admin/dashboard", icon: LayoutDashboard },
   { label: "Clientes", href: "/admin/clients", icon: Building2 },
   { label: "Qualidade", href: "/admin/quality", icon: HeartPulse },
   { label: "Análise RFV", href: "/admin/rfv", icon: PieChart },
@@ -52,14 +52,9 @@ export function AdminSidebar({ isAdmin, userName, userEmail }: AdminSidebarProps
       {/* Logo */}
       <div className="flex flex-col gap-0.5 px-5 py-5 border-b border-sidebar-border">
         <div className="flex items-center gap-2.5">
-          <Image
-            src="https://eusouhgs.com.br/wp-content/uploads/2025/07/2.png"
-            alt="HGS Soluções em Gestão"
-            width={28}
-            height={28}
-            className="rounded object-contain shrink-0"
-            unoptimized
-          />
+          <div className="w-7 h-7 rounded bg-blue-600 flex items-center justify-center shrink-0">
+            <Briefcase className="h-4 w-4 text-white" />
+          </div>
           <span className="text-sm font-bold text-sidebar-foreground leading-tight">
             HGS Soluções em Gestão
           </span>
@@ -73,10 +68,7 @@ export function AdminSidebar({ isAdmin, userName, userEmail }: AdminSidebarProps
       <nav className="flex-1 px-3 py-5 flex flex-col gap-1">
         {navItems.map((item) => {
           const Icon = item.icon
-          const active =
-            item.href === "/admin"
-              ? pathname === "/admin" || pathname === "/admin/dashboard"
-              : pathname.startsWith(item.href)
+          const active = pathname.startsWith(item.href)
           return (
             <Link
               key={item.href}
