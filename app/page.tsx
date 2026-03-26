@@ -1,5 +1,4 @@
-import { redirect } from "next/navigation"
-
 export default function RootPage() {
-  redirect("/auth/login")
+  // O middleware em middleware.ts já redireciona / para /auth/login ou /admin/dashboard
+  return null
 }
