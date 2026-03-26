@@ -1,33 +1,39 @@
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
-import { BarChart3 } from "lucide-react"
+import { PortalBdrClient } from "@/components/portal/portal-bdr-client"
 
 export default async function PortalBdrPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect("/auth/login")
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("full_name, role")
-    .eq("id", user.id)
+  const { data: tool } = await supabase
+    .from("user_tools")
+    .select("enabled")
+    .eq("user_id", user!.id)
+    .eq("tool", "bdr_performance")
     .single()
 
-  if (profile?.role !== "bdr_user") redirect("/portal/dashboard")
+  if (!tool?.enabled) redirect("/portal/dashboard")
+
+  const [membersRes, logsRes] = await Promise.all([
+    supabase
+      .from("bdr_members")
+      .select("id, name, email, is_active")
+      .eq("owner_id", user!.id)
+      .eq("is_active", true),
+    supabase
+      .from("bdr_daily_logs")
+      .select("*")
+      .eq("owner_id", user!.id)
+      .order("log_date", { ascending: false })
+      .limit(60),
+  ])
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-6">
-      <div className="max-w-md w-full text-center space-y-4">
-        <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
-          <BarChart3 className="h-7 w-7 text-primary" />
-        </div>
-        <h1 className="text-xl font-bold text-foreground">
-          Olá, {profile?.full_name ?? "BDR"}
-        </h1>
-        <p className="text-sm text-muted-foreground leading-relaxed">
-          Seu painel de BDR está sendo preparado. Em breve você poderá registrar seus lançamentos diários aqui.
-        </p>
-      </div>
-    </div>
+    <PortalBdrClient
+      ownerId={user!.id}
+      members={membersRes.data ?? []}
+      logs={logsRes.data ?? []}
+    />
   )
 }
