@@ -10,6 +10,7 @@ import {
   Settings,
   LogOut,
   Briefcase,
+  Wrench,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
@@ -25,6 +26,7 @@ const navItems: NavItem[] = [
   { label: "Clientes", href: "/admin/clients", icon: Building2 },
   { label: "Qualidade", href: "/admin/quality", icon: HeartPulse },
   { label: "Análise RFV", href: "/admin/rfv", icon: PieChart },
+  { label: "Ferramentas", href: "/admin/tools", icon: Wrench },
   { label: "Configurações", href: "/admin/settings", icon: Settings },
 ]
 
