@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
-import { TrendingUp, Lock } from "lucide-react"
+import { PortalRfvClient } from "@/components/portal/portal-rfv-client"
 
 export default async function PortalRfvPage() {
   const supabase = await createClient()
@@ -15,26 +15,25 @@ export default async function PortalRfvPage() {
 
   if (!tool?.enabled) redirect("/portal/dashboard")
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-foreground tracking-tight">Análise de RFV</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Recência, Frequência e Valor — segmente seus clientes de forma inteligente.
-        </p>
-      </div>
+  const [entriesRes, productsRes] = await Promise.all([
+    supabase
+      .from("client_rfv_entries")
+      .select("*")
+      .eq("owner_id", user!.id)
+      .order("purchase_date", { ascending: false }),
+    supabase
+      .from("client_products")
+      .select("*")
+      .eq("owner_id", user!.id)
+      .eq("is_active", true)
+      .order("name"),
+  ])
 
-      <div className="flex flex-col items-center justify-center min-h-[400px] rounded-xl border border-border bg-card text-center gap-4">
-        <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center">
-          <TrendingUp className="h-8 w-8 text-accent" />
-        </div>
-        <div>
-          <h3 className="text-lg font-semibold text-foreground">Análise de RFV</h3>
-          <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-            Esta ferramenta está disponível e em desenvolvimento. Em breve você poderá segmentar sua base de clientes por Recência, Frequência e Valor.
-          </p>
-        </div>
-      </div>
-    </div>
+  return (
+    <PortalRfvClient
+      ownerId={user!.id}
+      entries={entriesRes.data ?? []}
+      products={productsRes.data ?? []}
+    />
   )
 }

@@ -1,9 +1,12 @@
 "use client"
 
 import Link from "next/link"
-import { TrendingUp, Users, Target, Clock, CheckCircle2, AlertCircle, Lock, ArrowRight } from "lucide-react"
+import { useMemo } from "react"
+import { TrendingUp, Users, Target, Clock, CheckCircle2, Lock, ArrowRight, DollarSign, Star, AlertTriangle } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts"
+import { computePortalRfv, SEGMENT_CHART_COLORS, PORTAL_SEGMENT_ORDER, fmtValue, type PortalRfvEntry, type PortalRfvSegment } from "@/lib/rfv-portal"
 import { cn } from "@/lib/utils"
 
 interface Tool { tool: string; enabled: boolean }
@@ -15,6 +18,8 @@ interface Props {
   bdrCount: number
   activeGoals: Goal[]
   isPending: boolean
+  rfvEntries: Pick<PortalRfvEntry, "customer_name" | "value" | "purchase_date" | "product_name">[]
+  rfvEnabled: boolean
 }
 
 const TOOL_CARDS = [
@@ -47,9 +52,31 @@ const TOOL_CARDS = [
   },
 ]
 
-export function PortalOverviewClient({ profile, tools, bdrCount, activeGoals, isPending }: Props) {
+export function PortalOverviewClient({ profile, tools, bdrCount, activeGoals, isPending, rfvEntries, rfvEnabled }: Props) {
   const toolMap = Object.fromEntries(tools.map((t) => [t.tool, t.enabled]))
   const firstName = profile?.full_name?.split(" ")[0] ?? "usuário"
+
+  // ── RFV mini-data ────────────────────────────────────────────────────────
+  const rfvClients = useMemo(() => computePortalRfv(rfvEntries as PortalRfvEntry[]), [rfvEntries])
+  const rfvTotalRevenue = useMemo(() => rfvEntries.reduce((s, e) => s + Number(e.value), 0), [rfvEntries])
+  const rfvChampions = rfvClients.filter((c) => c.segment === "Campeões").length
+  const rfvAtRisk = rfvClients.filter((c) => c.segment === "Em Risco" || c.segment === "Hibernando").length
+
+  const segmentCounts = useMemo(() => {
+    const map: Partial<Record<PortalRfvSegment, number>> = {}
+    for (const c of rfvClients) map[c.segment] = (map[c.segment] ?? 0) + 1
+    return PORTAL_SEGMENT_ORDER.filter((s) => map[s]).map((s) => ({
+      name: s, value: map[s]!, color: SEGMENT_CHART_COLORS[s],
+    }))
+  }, [rfvClients])
+
+  const revenueByProduct = useMemo(() => {
+    const map: Record<string, number> = {}
+    for (const e of rfvEntries) map[e.product_name] = (map[e.product_name] ?? 0) + Number(e.value)
+    return Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([name, value]) => ({
+      name: name.length > 10 ? name.slice(0, 10) + "…" : name, value,
+    }))
+  }, [rfvEntries])
 
   if (isPending) {
     return (
@@ -185,6 +212,108 @@ export function PortalOverviewClient({ profile, tools, bdrCount, activeGoals, is
               )
             })}
           </div>
+        </div>
+      )}
+
+      {/* ── Mini-dashboard RFV ──────────────────────────────────────────────── */}
+      {rfvEnabled && rfvEntries.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-foreground">Visão RFV</h3>
+            <Link href="/portal/rfv" className="text-xs text-accent hover:underline flex items-center gap-1">
+              Ver análise completa <ArrowRight className="h-3 w-3" />
+            </Link>
+          </div>
+
+          {/* KPIs RFV */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+            {[
+              { label: "Receita Total", value: fmtValue(rfvTotalRevenue), icon: DollarSign, bg: "bg-blue-50", color: "text-blue-600" },
+              { label: "Clientes Únicos", value: String(rfvClients.length), icon: Users, bg: "bg-slate-50", color: "text-slate-600" },
+              { label: "Campeões", value: String(rfvChampions), icon: Star, bg: "bg-emerald-50", color: "text-emerald-600" },
+              { label: "Em Risco", value: String(rfvAtRisk), icon: AlertTriangle, bg: "bg-red-50", color: "text-red-500" },
+            ].map((k) => (
+              <div key={k.label} className="bg-card border border-border rounded-xl p-3 flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-xs text-muted-foreground">{k.label}</p>
+                  <p className="text-xl font-bold text-foreground mt-0.5">{k.value}</p>
+                </div>
+                <div className={cn("p-1.5 rounded-lg shrink-0", k.bg)}>
+                  <k.icon className={cn("h-4 w-4", k.color)} />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Gráficos RFV */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Donut por segmento */}
+            <Card className="border-border">
+              <CardHeader className="pb-0 pt-4 px-4">
+                <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+                  Distribuição por Segmento
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-2 px-4 pb-4">
+                <div className="flex items-center gap-4">
+                  <ResponsiveContainer width={120} height={120}>
+                    <PieChart>
+                      <Pie data={segmentCounts} cx="50%" cy="50%" innerRadius={30} outerRadius={55} dataKey="value" paddingAngle={2}>
+                        {segmentCounts.map((entry) => (
+                          <Cell key={entry.name} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(v: number) => [`${v} clientes`]} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="flex flex-col gap-1 min-w-0">
+                    {segmentCounts.slice(0, 6).map((s) => (
+                      <div key={s.name} className="flex items-center gap-1.5">
+                        <div className="w-2 h-2 rounded-sm shrink-0" style={{ background: s.color }} />
+                        <span className="text-[11px] text-muted-foreground truncate">{s.name}</span>
+                        <span className="text-[11px] font-semibold text-foreground ml-auto">{s.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Bar por produto */}
+            <Card className="border-border">
+              <CardHeader className="pb-0 pt-4 px-4">
+                <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+                  Receita por Produto
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-2 px-4 pb-4">
+                <ResponsiveContainer width="100%" height={140}>
+                  <BarChart data={revenueByProduct} margin={{ bottom: 16 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="name" tick={{ fontSize: 9 }} interval={0} angle={-25} textAnchor="end" />
+                    <YAxis tickFormatter={(v) => fmtValue(v)} tick={{ fontSize: 9 }} width={48} />
+                    <Tooltip formatter={(v: number) => [fmtValue(v)]} />
+                    <Bar dataKey="value" fill="#10b981" radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* CTA RFV quando habilitado mas sem dados */}
+      {rfvEnabled && rfvEntries.length === 0 && (
+        <div className="rounded-xl border border-dashed border-border bg-card/50 p-6 flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-foreground">Análise de RFV ativa</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Comece cadastrando as transações dos seus clientes para ver os gráficos aqui.</p>
+          </div>
+          <Link href="/portal/rfv">
+            <Badge className="bg-accent/10 text-accent border-accent/20 gap-1 cursor-pointer hover:bg-accent/20 transition-colors">
+              <TrendingUp className="h-3 w-3" /> Abrir RFV
+            </Badge>
+          </Link>
         </div>
       )}
     </div>
