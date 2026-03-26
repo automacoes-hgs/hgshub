@@ -31,6 +31,10 @@ export async function middleware(request: NextRequest) {
   // Não coloque nenhum código entre createServerClient e getUser()
   const { data: { user } } = await supabase.auth.getUser()
 
+  if (pathname === '/') {
+    return supabaseResponse
+  }
+
   if (pathname.startsWith('/admin') && !user) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
