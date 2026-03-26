@@ -1,4 +1,12 @@
-export default function RootPage() {
-  // O middleware em middleware.ts já redireciona / para /auth/login ou /admin/dashboard
-  return null
+import { redirect } from "next/navigation"
+import { createClient } from "@/lib/supabase/server"
+
+export default async function RootPage() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (user) {
+    redirect("/admin/dashboard")
+  } else {
+    redirect("/auth/login")
+  }
 }

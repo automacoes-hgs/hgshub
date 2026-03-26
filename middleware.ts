@@ -49,13 +49,6 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Redirecionar raiz para login
-  if (pathname === '/') {
-    const url = request.nextUrl.clone()
-    url.pathname = user ? '/admin/dashboard' : '/auth/login'
-    return NextResponse.redirect(url)
-  }
-
   return supabaseResponse
 }
 
