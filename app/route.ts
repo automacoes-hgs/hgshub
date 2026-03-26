@@ -1,17 +1,11 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 
-export default async function RootPage() {
+export async function GET() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const destination = user ? "/admin/dashboard" : "/auth/login"
-
-  return (
-    <html>
-      <head>
-        <meta httpEquiv="refresh" content={`0;url=${destination}`} />
-      </head>
-      <body />
-    </html>
+  return NextResponse.redirect(
+    new URL(destination, process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000")
   )
 }
