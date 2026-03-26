@@ -28,8 +28,10 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // Não coloque nenhum código entre createServerClient e getUser()
-  const { data: { user } } = await supabase.auth.getUser()
+  // getSession lê do cookie (sem roundtrip de rede) — evita rate limit do Supabase Auth
+  // getUser() fica reservado apenas para validação segura no lado do servidor (Server Components)
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user ?? null
 
   if (pathname.startsWith('/admin') && !user) {
     const url = request.nextUrl.clone()
