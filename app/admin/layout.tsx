@@ -25,7 +25,11 @@ export default async function AdminLayout({
 
   return (
     <div className="flex min-h-screen bg-background font-sans">
-      <AdminSidebar isAdmin={profile?.is_admin ?? false} />
+      <AdminSidebar
+        isAdmin={profile?.is_admin ?? false}
+        userName={profile?.full_name || user.email || "Usuário"}
+        userEmail={user.email || ""}
+      />
       <div className="flex flex-col flex-1 min-w-0">
         <AdminHeader
           userName={profile?.full_name || user.email || "Usuário"}
