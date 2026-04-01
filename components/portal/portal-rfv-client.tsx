@@ -79,6 +79,46 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
   const [productForm, setProductForm] = useState<ProductForm>(EMPTY_PRODUCT)
   const [productLoading, setProductLoading] = useState(false)
 
+  // Seleção múltipla para exclusão em massa
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+  function toggleSelectAll(ids: string[]) {
+    setSelectedIds((prev) => {
+      const allSelected = ids.every((id) => prev.has(id))
+      if (allSelected) {
+        const next = new Set(prev)
+        ids.forEach((id) => next.delete(id))
+        return next
+      }
+      return new Set([...prev, ...ids])
+    })
+  }
+  async function handleBulkDelete() {
+    if (selectedIds.size === 0) return
+    if (!confirm(`Remover ${selectedIds.size} entrada(s) selecionada(s)?`)) return
+    setBulkDeleting(true)
+    const ids = [...selectedIds]
+    const { error } = await supabase.from("client_rfv_entries").delete().in("id", ids)
+    if (error) {
+      toast({ title: "Erro ao remover", description: error.message, variant: "destructive" })
+      setBulkDeleting(false)
+      return
+    }
+    setEntries((prev) => prev.filter((e) => !selectedIds.has(e.id)))
+    setSelectedIds(new Set())
+    setBulkDeleting(false)
+    toast({ title: `${ids.length} entrada(s) removida(s)` })
+    startTransition(() => router.refresh())
+  }
+
   // Importação
   const [importModal, setImportModal] = useState(false)
   function handleImported(newEntries: typeof entries, newProducts: typeof products) {
@@ -412,56 +452,82 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
                       <TrendingUp className="h-4 w-4 text-accent" /> Matriz RFV
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
-                    <div className="flex gap-3">
-                      {/* Eixo Y */}
-                      <div className="flex items-center justify-center">
-                        <span className="text-[10px] text-muted-foreground [writing-mode:vertical-lr] rotate-180 text-center leading-none">
-                          Frequência e valor (regularidade e gasto)
+                  <CardContent className="pb-4">
+                    <div className="flex gap-2">
+                      {/* Eixo Y label */}
+                      <div className="flex items-center justify-center w-5 shrink-0">
+                        <span className="text-[9px] font-medium text-muted-foreground [writing-mode:vertical-lr] rotate-180 text-center leading-none tracking-wide uppercase">
+                          Frequência e valor
                         </span>
                       </div>
 
-                      {/* Grid 3×3 */}
-                      <div className="flex-1 flex flex-col gap-1.5">
-                        {MATRIX_GRID.map((row, rowIdx) => (
-                          <div key={rowIdx} className="grid grid-cols-3 gap-1.5">
-                            {row.map((cell) => {
-                              const count = matrixData[cell.seg] ?? 0
-                              const pct = rfvClients.length
-                                ? Math.round((count / rfvClients.length) * 100)
-                                : 0
-                              const textColor = cell.matrixText === "#555" ? "#555" : "#fff"
-                              return (
-                                <div
-                                  key={cell.seg}
-                                  className="rounded-xl p-3 flex flex-col gap-0.5"
-                                  style={{ backgroundColor: cell.matrixBg }}
-                                >
-                                  <p
-                                    className="text-[11px] font-semibold leading-tight"
-                                    style={{ color: textColor, opacity: 0.9 }}
-                                  >
-                                    {cell.label}
-                                  </p>
-                                  <p
-                                    className="text-2xl font-bold leading-none mt-1"
-                                    style={{ color: textColor }}
-                                  >
-                                    {count}
-                                  </p>
-                                  <p
-                                    className="text-[10px] font-medium"
-                                    style={{ color: textColor, opacity: 0.7 }}
-                                  >
-                                    {pct}%
-                                  </p>
-                                </div>
-                              )
-                            })}
-                          </div>
-                        ))}
+                      <div className="flex-1 flex flex-col gap-1">
+                        {/* Grid 3×3 com labels de FV à esquerda */}
+                        {MATRIX_GRID.map((row, rowIdx) => {
+                          const fvLabel = rowIdx === 0 ? "Alto" : rowIdx === 1 ? "Médio" : "Baixo"
+                          return (
+                            <div key={rowIdx} className="flex items-stretch gap-1">
+                              {/* Label FV */}
+                              <div className="flex items-center justify-center w-8 shrink-0">
+                                <span className="text-[9px] font-semibold text-muted-foreground [writing-mode:vertical-lr] rotate-180 text-center leading-none">
+                                  {fvLabel}
+                                </span>
+                              </div>
+                              {/* Células */}
+                              <div className="flex-1 grid grid-cols-3 gap-1">
+                                {row.map((cell) => {
+                                  const count = matrixData[cell.seg] ?? 0
+                                  const pct = rfvClients.length
+                                    ? Math.round((count / rfvClients.length) * 100)
+                                    : 0
+                                  const textColor = cell.matrixText === "#555" ? "#555" : "#fff"
+                                  return (
+                                    <div
+                                      key={cell.seg}
+                                      className="rounded-xl p-2.5 flex flex-col justify-between min-h-[72px]"
+                                      style={{ backgroundColor: cell.matrixBg }}
+                                    >
+                                      <p
+                                        className="text-[10px] font-semibold leading-tight"
+                                        style={{ color: textColor, opacity: 0.9 }}
+                                      >
+                                        {cell.label}
+                                      </p>
+                                      <div>
+                                        <p
+                                          className="text-xl font-bold leading-none"
+                                          style={{ color: textColor }}
+                                        >
+                                          {count}
+                                        </p>
+                                        <p
+                                          className="text-[10px] font-medium mt-0.5"
+                                          style={{ color: textColor, opacity: 0.7 }}
+                                        >
+                                          {pct}%
+                                        </p>
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          )
+                        })}
 
-                        <p className="text-[10px] text-muted-foreground text-center mt-1">
+                        {/* Eixo X labels das colunas */}
+                        <div className="flex gap-1 mt-1">
+                          <div className="w-8 shrink-0" />
+                          <div className="flex-1 grid grid-cols-3 gap-1">
+                            {["Antigo", "Médio", "Recente"].map((label) => (
+                              <p key={label} className="text-[9px] font-semibold text-muted-foreground text-center uppercase tracking-wide">
+                                {label}
+                              </p>
+                            ))}
+                          </div>
+                        </div>
+
+                        <p className="text-[10px] text-muted-foreground text-center mt-0.5">
                           Recência (quão recentemente o cliente comprou)
                         </p>
                       </div>
@@ -583,12 +649,24 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
       {/* ── CLIENTES ──────────────────────────────────────────────────────────── */}
       {activeTab === "clientes" && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="relative flex-1 max-w-xs">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="relative flex-1 min-w-[200px] max-w-xs">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input placeholder="Buscar cliente ou produto..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              {selectedIds.size > 0 && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleBulkDelete}
+                  disabled={bulkDeleting}
+                  className="gap-2"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  {bulkDeleting ? "Removendo..." : `Excluir ${selectedIds.size} selecionado(s)`}
+                </Button>
+              )}
               <Button variant="outline" onClick={() => setImportModal(true)} className="gap-2">
                 <Upload className="h-4 w-4" /> Importar
               </Button>
@@ -612,6 +690,15 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-border">
+                        <th className="px-4 py-3 w-10">
+                          <input
+                            type="checkbox"
+                            className="rounded border-border cursor-pointer accent-primary"
+                            checked={filteredEntries.length > 0 && filteredEntries.every((e) => selectedIds.has(e.id))}
+                            onChange={() => toggleSelectAll(filteredEntries.map((e) => e.id))}
+                            aria-label="Selecionar todos"
+                          />
+                        </th>
                         <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground">Cliente</th>
                         <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground">Produto/Serviço</th>
                         <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground">Valor</th>
@@ -621,25 +708,43 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredEntries.map((e) => (
-                        <tr key={e.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                          <td className="px-4 py-3 font-medium text-foreground">{e.customer_name}</td>
-                          <td className="px-4 py-3 text-muted-foreground">{e.product_name}</td>
-                          <td className="px-4 py-3 text-right font-semibold text-foreground">{fmtValue(Number(e.value))}</td>
-                          <td className="px-4 py-3 text-muted-foreground">{PAYMENT_LABELS[e.payment_method] ?? e.payment_method}</td>
-                          <td className="px-4 py-3 text-muted-foreground">{new Date(e.purchase_date + "T00:00:00").toLocaleDateString("pt-BR")}</td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center justify-center gap-2">
-                              <button onClick={() => openEntryEdit(e)} className="text-muted-foreground hover:text-foreground transition-colors">
-                                <Pencil className="h-3.5 w-3.5" />
-                              </button>
-                              <button onClick={() => handleEntryDelete(e.id)} className="text-muted-foreground hover:text-destructive transition-colors">
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
+                      {filteredEntries.map((e) => {
+                        const isSelected = selectedIds.has(e.id)
+                        return (
+                          <tr
+                            key={e.id}
+                            className={cn(
+                              "border-b border-border/50 hover:bg-muted/30 transition-colors",
+                              isSelected && "bg-primary/5"
+                            )}
+                          >
+                            <td className="px-4 py-3">
+                              <input
+                                type="checkbox"
+                                className="rounded border-border cursor-pointer accent-primary"
+                                checked={isSelected}
+                                onChange={() => toggleSelect(e.id)}
+                                aria-label={`Selecionar ${e.customer_name}`}
+                              />
+                            </td>
+                            <td className="px-4 py-3 font-medium text-foreground">{e.customer_name}</td>
+                            <td className="px-4 py-3 text-muted-foreground">{e.product_name}</td>
+                            <td className="px-4 py-3 text-right font-semibold text-foreground">{fmtValue(Number(e.value))}</td>
+                            <td className="px-4 py-3 text-muted-foreground">{PAYMENT_LABELS[e.payment_method] ?? e.payment_method}</td>
+                            <td className="px-4 py-3 text-muted-foreground">{new Date(e.purchase_date + "T00:00:00").toLocaleDateString("pt-BR")}</td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center justify-center gap-2">
+                                <button onClick={() => openEntryEdit(e)} className="text-muted-foreground hover:text-foreground transition-colors">
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </button>
+                                <button onClick={() => handleEntryDelete(e.id)} className="text-muted-foreground hover:text-destructive transition-colors">
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
