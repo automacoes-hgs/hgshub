@@ -1,5 +1,4 @@
-// Lógica RFV adaptada para client_rfv_entries (portal do cliente)
-// Mesma engine do admin, mas operando sobre as entradas do portal
+// Lógica RFV — scoring por terços dinâmicos, matriz 3×3 conforme especificação
 
 export type PortalRfvEntry = {
   id: string
@@ -16,122 +15,220 @@ export type PortalRfvEntry = {
 
 export type PortalRfvSegment =
   | "Campeões"
-  | "Fiéis"
-  | "Promissores"
-  | "Novos Clientes"
-  | "Iniciantes"
+  | "Clientes Fiéis"
+  | "Não Perder"
+  | "Potenciais"
   | "Precisam de Atenção"
   | "Em Risco"
+  | "Perdidos"
+  | "Prestes a Hibernar"
   | "Hibernando"
 
 export type PortalClientRfv = {
   customerName: string
   entries: PortalRfvEntry[]
-  recency: number
-  frequency: number
-  monetary: number
-  score: number
+  recency: number        // R_score 1–3
+  frequency: number      // F_score 1–3
+  monetary: number       // V_score 1–3
+  fv: number             // FV = round((F+V)/2), 1–3
+  score: number          // média (R+F+V)/3 para exibição
   segment: PortalRfvSegment
   totalValue: number
   lastPurchaseDate: string
   firstPurchaseDate: string
+  recencyDays: number
+  orderCount: number
 }
 
-function recencyScore(lastDate: string): number {
-  const days = Math.round((Date.now() - new Date(lastDate).getTime()) / 86400000)
-  if (days <= 30) return 5
-  if (days <= 90) return 4
-  if (days <= 180) return 3
-  if (days <= 365) return 2
-  return 1
+// ── Helpers de percentil ─────────────────────────────────────────────────────
+
+/** Calcula o percentil p (0–1) de um array numérico ordenado */
+function percentil(sorted: number[], p: number): number {
+  const idx = p * (sorted.length - 1)
+  const lo = Math.floor(idx)
+  const hi = Math.ceil(idx)
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo)
 }
 
-function frequencyScore(count: number): number {
-  if (count >= 10) return 5
-  if (count >= 6) return 4
-  if (count >= 3) return 3
-  if (count >= 2) return 2
-  return 1
+/**
+ * Dá score de 1–3 por terços dinâmicos.
+ * inverter=true → valores menores recebem score maior (usado para recência).
+ */
+function scoreTermos(valor: number, todos: number[], inverter = false): number {
+  const sorted = [...todos].sort((a, b) => a - b)
+  const p33 = percentil(sorted, 1 / 3)
+  const p66 = percentil(sorted, 2 / 3)
+
+  let score: number
+  if (valor <= p33) score = 1
+  else if (valor <= p66) score = 2
+  else score = 3
+
+  return inverter ? 4 - score : score
 }
 
-function monetaryScore(total: number): number {
-  if (total >= 200000) return 5
-  if (total >= 80000) return 4
-  if (total >= 30000) return 3
-  if (total >= 10000) return 2
-  return 1
+// ── Mapeamento R × FV → Segmento ─────────────────────────────────────────────
+// Conforme documento:
+//              R=1 (Antigo)      R=2 (Médio)        R=3 (Recente)
+// FV=3 (Alto)  Não Perder        Clientes Fiéis      Campeões
+// FV=2 (Médio) Em Risco          Precisam Atenção    Potenciais
+// FV=1 (Baixo) Hibernando        Prestes Hibernar    Perdidos
+
+const SEGMENT_MAP: Record<number, Record<number, PortalRfvSegment>> = {
+  3: { 1: "Não Perder",    2: "Clientes Fiéis",      3: "Campeões"          },
+  2: { 1: "Em Risco",      2: "Precisam de Atenção", 3: "Potenciais"        },
+  1: { 1: "Hibernando",    2: "Prestes a Hibernar",  3: "Perdidos"          },
 }
 
-function deriveSegment(r: number, f: number, m: number): PortalRfvSegment {
-  if (r >= 4 && f >= 4 && m >= 4) return "Campeões"
-  if (r >= 3 && f >= 4) return "Fiéis"
-  if (r >= 4 && f <= 2) return "Promissores"
-  if (r >= 4 && f === 1 && m <= 2) return "Novos Clientes"
-  const score = (r + f + m) / 3
-  if (score >= 4) return "Iniciantes"
-  if (r <= 2 && f >= 3 && m >= 3) return "Precisam de Atenção"
-  if (r <= 2 && f >= 2) return "Em Risco"
-  return "Hibernando"
+function classificar(r: number, fv: number): PortalRfvSegment {
+  return SEGMENT_MAP[fv]?.[r] ?? "Precisam de Atenção"
 }
+
+// ── Engine principal ─────────────────────────────────────────────────────────
 
 export function computePortalRfv(entries: PortalRfvEntry[]): PortalClientRfv[] {
+  if (entries.length === 0) return []
+
+  // Agrupa por cliente
   const byCustomer = new Map<string, PortalRfvEntry[]>()
   for (const e of entries) {
-    if (!byCustomer.has(e.customer_name)) byCustomer.set(e.customer_name, [])
-    byCustomer.get(e.customer_name)!.push(e)
+    const key = e.customer_name.trim().toLowerCase()
+    if (!byCustomer.has(key)) byCustomer.set(key, [])
+    byCustomer.get(key)!.push(e)
   }
 
-  return Array.from(byCustomer.entries()).map(([customerName, customerEntries]) => {
+  // Data de referência = hoje ou data mais recente dos dados (o que for maior)
+  const allTimestamps = entries.map((e) => new Date(e.purchase_date + "T00:00:00").getTime())
+  const referenceDate = Math.max(Date.now(), ...allTimestamps)
+
+  // Passo 1: agregar R, F, V brutos por cliente
+  type Raw = {
+    customerName: string
+    entries: PortalRfvEntry[]
+    recencyDays: number   // dias desde última compra
+    orderCount: number    // datas únicas de compra
+    totalValue: number
+    lastPurchaseDate: string
+    firstPurchaseDate: string
+  }
+
+  const rawList: Raw[] = Array.from(byCustomer.entries()).map(([, customerEntries]) => {
+    const customerName = customerEntries[0].customer_name.trim()
+    const uniqueDates = [...new Set(customerEntries.map((e) => e.purchase_date))].sort()
+    const orderCount = uniqueDates.length
     const totalValue = customerEntries.reduce((s, e) => s + Number(e.value), 0)
-    const dates = customerEntries.map((e) => e.purchase_date).sort()
-    const lastPurchaseDate = dates[dates.length - 1]
-    const firstPurchaseDate = dates[0]
-    const r = recencyScore(lastPurchaseDate)
-    const f = frequencyScore(customerEntries.length)
-    const m = monetaryScore(totalValue)
-    const score = Math.round(((r + f + m) / 3) * 10) / 10
+    const lastPurchaseDate = uniqueDates[uniqueDates.length - 1]
+    const firstPurchaseDate = uniqueDates[0]
+    const recencyDays = Math.round(
+      (referenceDate - new Date(lastPurchaseDate + "T00:00:00").getTime()) / 86400000
+    )
+    return { customerName, entries: customerEntries, recencyDays, orderCount, totalValue, lastPurchaseDate, firstPurchaseDate }
+  })
+
+  // Passo 2: arrays globais para terços dinâmicos
+  const allRecencies  = rawList.map((c) => c.recencyDays)
+  const allFreqs      = rawList.map((c) => c.orderCount)
+  const allValues     = rawList.map((c) => c.totalValue)
+
+  // Passo 3 + 4: calcular scores e posicionar na matriz
+  return rawList.map((c) => {
+    const r  = scoreTermos(c.recencyDays, allRecencies, true)   // menor dias → score maior
+    const f  = scoreTermos(c.orderCount,  allFreqs,     false)
+    const v  = scoreTermos(c.totalValue,  allValues,    false)
+    const fv = Math.round((f + v) / 2) as 1 | 2 | 3             // eixo vertical da matriz
+    const score = Math.round(((r + f + v) / 3) * 10) / 10
+
     return {
-      customerName,
-      entries: customerEntries,
+      customerName: c.customerName,
+      entries: c.entries,
       recency: r,
       frequency: f,
-      monetary: m,
+      monetary: v,
+      fv,
       score,
-      segment: deriveSegment(r, f, m),
-      totalValue,
-      lastPurchaseDate,
-      firstPurchaseDate,
+      segment: classificar(r, fv),
+      totalValue: c.totalValue,
+      lastPurchaseDate: c.lastPurchaseDate,
+      firstPurchaseDate: c.firstPurchaseDate,
+      recencyDays: c.recencyDays,
+      orderCount: c.orderCount,
     }
   })
 }
 
-export const PORTAL_SEGMENT_COLORS: Record<PortalRfvSegment, { bg: string; text: string; border: string; dot: string; card: string }> = {
-  "Campeões":              { bg: "bg-emerald-50",  text: "text-emerald-700",  border: "border-emerald-200",  dot: "bg-emerald-500",  card: "bg-emerald-500" },
-  "Fiéis":                 { bg: "bg-sky-50",       text: "text-sky-700",      border: "border-sky-200",      dot: "bg-sky-500",      card: "bg-sky-500" },
-  "Promissores":           { bg: "bg-amber-50",     text: "text-amber-700",    border: "border-amber-200",    dot: "bg-amber-500",    card: "bg-amber-500" },
-  "Novos Clientes":        { bg: "bg-violet-50",    text: "text-violet-700",   border: "border-violet-200",   dot: "bg-violet-500",   card: "bg-violet-500" },
-  "Iniciantes":            { bg: "bg-blue-50",      text: "text-blue-700",     border: "border-blue-200",     dot: "bg-blue-500",     card: "bg-blue-500" },
-  "Precisam de Atenção":   { bg: "bg-orange-50",    text: "text-orange-700",   border: "border-orange-200",   dot: "bg-orange-500",   card: "bg-orange-500" },
-  "Em Risco":              { bg: "bg-red-50",       text: "text-red-700",      border: "border-red-200",      dot: "bg-red-500",      card: "bg-red-500" },
-  "Hibernando":            { bg: "bg-slate-100",    text: "text-slate-600",    border: "border-slate-200",    dot: "bg-slate-400",    card: "bg-slate-400" },
+// ── Cores dos segmentos ──────────────────────────────────────────────────────
+
+export const PORTAL_SEGMENT_COLORS: Record<
+  PortalRfvSegment,
+  { bg: string; text: string; border: string; dot: string; card: string; hex: string }
+> = {
+  "Campeões":            { bg: "bg-emerald-50",  text: "text-emerald-700", border: "border-emerald-200", dot: "bg-emerald-500", card: "bg-emerald-500",  hex: "#27AE60" },
+  "Clientes Fiéis":      { bg: "bg-green-50",    text: "text-green-700",   border: "border-green-200",   dot: "bg-green-500",   card: "bg-green-500",    hex: "#2ECC71" },
+  "Não Perder":          { bg: "bg-red-50",      text: "text-red-700",     border: "border-red-200",     dot: "bg-red-500",     card: "bg-red-500",      hex: "#E74C3C" },
+  "Em Risco":            { bg: "bg-orange-50",   text: "text-orange-700",  border: "border-orange-200",  dot: "bg-orange-500",  card: "bg-orange-500",   hex: "#F39C12" },
+  "Precisam de Atenção": { bg: "bg-amber-50",    text: "text-amber-700",   border: "border-amber-200",   dot: "bg-amber-500",   card: "bg-amber-500",    hex: "#E67E22" },
+  "Potenciais":          { bg: "bg-sky-50",      text: "text-sky-700",     border: "border-sky-200",     dot: "bg-sky-500",     card: "bg-sky-500",      hex: "#5DADE2" },
+  "Perdidos":            { bg: "bg-zinc-100",    text: "text-zinc-500",    border: "border-zinc-200",    dot: "bg-zinc-400",    card: "bg-zinc-300",     hex: "#BDC3C7" },
+  "Prestes a Hibernar":  { bg: "bg-slate-100",   text: "text-slate-600",   border: "border-slate-200",   dot: "bg-slate-400",   card: "bg-slate-400",    hex: "#7F8C8D" },
+  "Hibernando":          { bg: "bg-slate-100",   text: "text-slate-500",   border: "border-slate-200",   dot: "bg-slate-500",   card: "bg-slate-500",    hex: "#95A5A6" },
 }
 
 export const PORTAL_SEGMENT_ORDER: PortalRfvSegment[] = [
-  "Campeões", "Fiéis", "Promissores", "Novos Clientes",
-  "Iniciantes", "Precisam de Atenção", "Em Risco", "Hibernando",
+  "Campeões",
+  "Clientes Fiéis",
+  "Não Perder",
+  "Potenciais",
+  "Precisam de Atenção",
+  "Em Risco",
+  "Perdidos",
+  "Prestes a Hibernar",
+  "Hibernando",
 ]
 
-// Cores para gráfico donut
+// ── Grid da Matriz RFV 3×3 ───────────────────────────────────────────────────
+// Linhas: FV=3 (topo) → FV=2 → FV=1 (base)
+// Colunas: R=1 (esq) → R=2 → R=3 (dir)
+
+export const MATRIX_GRID: {
+  label: string
+  seg: PortalRfvSegment
+  matrixBg: string
+  matrixText: string
+  r: number
+  fv: number
+}[][] = [
+  [
+    { label: "Não Perder",          seg: "Não Perder",          matrixBg: "#E74C3C", matrixText: "#fff", r: 1, fv: 3 },
+    { label: "Clientes Fiéis",      seg: "Clientes Fiéis",      matrixBg: "#2ECC71", matrixText: "#fff", r: 2, fv: 3 },
+    { label: "Campeões",            seg: "Campeões",            matrixBg: "#27AE60", matrixText: "#fff", r: 3, fv: 3 },
+  ],
+  [
+    { label: "Em Risco",            seg: "Em Risco",            matrixBg: "#F39C12", matrixText: "#fff", r: 1, fv: 2 },
+    { label: "Precisam de Atenção", seg: "Precisam de Atenção", matrixBg: "#E67E22", matrixText: "#fff", r: 2, fv: 2 },
+    { label: "Potenciais",          seg: "Potenciais",          matrixBg: "#5DADE2", matrixText: "#fff", r: 3, fv: 2 },
+  ],
+  [
+    { label: "Hibernando",          seg: "Hibernando",          matrixBg: "#95A5A6", matrixText: "#fff", r: 1, fv: 1 },
+    { label: "Prestes a Hibernar",  seg: "Prestes a Hibernar",  matrixBg: "#7F8C8D", matrixText: "#fff", r: 2, fv: 1 },
+    { label: "Perdidos",            seg: "Perdidos",            matrixBg: "#BDC3C7", matrixText: "#555", r: 3, fv: 1 },
+  ],
+]
+
+// ── Cores para gráfico donut ─────────────────────────────────────────────────
+
 export const SEGMENT_CHART_COLORS: Record<PortalRfvSegment, string> = {
-  "Campeões":            "#10b981",
-  "Fiéis":               "#0ea5e9",
-  "Promissores":         "#f59e0b",
-  "Novos Clientes":      "#8b5cf6",
-  "Iniciantes":          "#3b82f6",
-  "Precisam de Atenção": "#f97316",
-  "Em Risco":            "#ef4444",
-  "Hibernando":          "#94a3b8",
+  "Campeões":            "#27AE60",
+  "Clientes Fiéis":      "#2ECC71",
+  "Não Perder":          "#E74C3C",
+  "Em Risco":            "#F39C12",
+  "Precisam de Atenção": "#E67E22",
+  "Potenciais":          "#5DADE2",
+  "Perdidos":            "#BDC3C7",
+  "Prestes a Hibernar":  "#7F8C8D",
+  "Hibernando":          "#95A5A6",
 }
+
+// ── Utilitários ──────────────────────────────────────────────────────────────
 
 export function fmtValue(value: number) {
   if (value >= 1_000_000) return `R$ ${(value / 1_000_000).toFixed(1)} mi`

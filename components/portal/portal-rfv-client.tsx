@@ -1,17 +1,17 @@
 "use client"
 
-import { useState, useTransition, useMemo } from "react"
+import { useState, useTransition, useMemo, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import {
   TrendingUp, Users, DollarSign, Star, AlertTriangle, UserCheck,
-  Plus, Pencil, Trash2, Search, Package, FileBarChart2, ChevronDown,
-  Target, BarChart3, PieChartIcon, ArrowUpRight, Upload
+  Plus, Pencil, Trash2, Search, Package, FileBarChart2,
+  Target, BarChart3, PieChartIcon, ArrowUpRight, Upload,
+  ChevronLeft, ChevronRight
 } from "lucide-react"
 import { PortalRfvImport } from "./portal-rfv-import"
 import { createClient } from "@/lib/supabase/client"
 import { useToast } from "@/hooks/use-toast"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -20,11 +20,11 @@ import {
 } from "@/components/ui/dialog"
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
 } from "recharts"
 import {
   computePortalRfv, PORTAL_SEGMENT_COLORS, PORTAL_SEGMENT_ORDER,
-  SEGMENT_CHART_COLORS, fmtValue, PAYMENT_LABELS,
+  SEGMENT_CHART_COLORS, MATRIX_GRID, fmtValue, PAYMENT_LABELS,
   type PortalRfvEntry, type PortalRfvSegment,
 } from "@/lib/rfv-portal"
 import { cn } from "@/lib/utils"
@@ -40,31 +40,6 @@ interface Props {
   entries: PortalRfvEntry[]
   products: Product[]
 }
-
-// ─── Matriz RFV ─────────────────────────────────────────────────────────────
-const MATRIX_CELLS: { label: PortalRfvSegment; bg: string; text: string }[][] = [
-  [
-    { label: "Não Perder" as any, bg: "bg-red-400",     text: "text-white" },
-    { label: "Fiéis",            bg: "bg-emerald-400",  text: "text-white" },
-    { label: "Campeões",         bg: "bg-emerald-500",  text: "text-white" },
-  ],
-  [
-    { label: "Em Risco",         bg: "bg-amber-400",    text: "text-white" },
-    { label: "Precisam de Atenção", bg: "bg-orange-400", text: "text-white" },
-    { label: "Promissores" as any, bg: "bg-violet-400", text: "text-white" },
-  ],
-  [
-    { label: "Hibernando",       bg: "bg-slate-400",    text: "text-white" },
-    { label: "Prestes a Hibernar" as any, bg: "bg-slate-300", text: "text-slate-700" },
-    { label: "Perdidos" as any,  bg: "bg-slate-200",    text: "text-slate-600" },
-    
-  ],
-  [
-    { label: "Hibernando",       bg: "bg-slate-400",    text: "text-white" },
-    { label: "Promissores",      bg: "bg-amber-400",    text: "text-white" },
-    { label: "Novos Clientes",   bg: "bg-violet-400",   text: "text-white" },
-  ],
-]
 
 // ─── Formulário de entrada ───────────────────────────────────────────────────
 type EntryForm = {
@@ -104,6 +79,46 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
   const [productForm, setProductForm] = useState<ProductForm>(EMPTY_PRODUCT)
   const [productLoading, setProductLoading] = useState(false)
 
+  // Seleção múltipla para exclusão em massa
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+  function toggleSelectAll(ids: string[]) {
+    setSelectedIds((prev) => {
+      const allSelected = ids.every((id) => prev.has(id))
+      if (allSelected) {
+        const next = new Set(prev)
+        ids.forEach((id) => next.delete(id))
+        return next
+      }
+      return new Set([...prev, ...ids])
+    })
+  }
+  async function handleBulkDelete() {
+    if (selectedIds.size === 0) return
+    if (!confirm(`Remover ${selectedIds.size} entrada(s) selecionada(s)?`)) return
+    setBulkDeleting(true)
+    const ids = [...selectedIds]
+    const { error } = await supabase.from("client_rfv_entries").delete().in("id", ids)
+    if (error) {
+      toast({ title: "Erro ao remover", description: error.message, variant: "destructive" })
+      setBulkDeleting(false)
+      return
+    }
+    setEntries((prev) => prev.filter((e) => !selectedIds.has(e.id)))
+    setSelectedIds(new Set())
+    setBulkDeleting(false)
+    toast({ title: `${ids.length} entrada(s) removida(s)` })
+    startTransition(() => router.refresh())
+  }
+
   // Importação
   const [importModal, setImportModal] = useState(false)
   function handleImported(newEntries: typeof entries, newProducts: typeof products) {
@@ -121,7 +136,10 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
   const totalRevenue = useMemo(() => entries.reduce((s, e) => s + Number(e.value), 0), [entries])
   const avgTicket = rfvClients.length ? totalRevenue / rfvClients.length : 0
   const champions = rfvClients.filter((c) => c.segment === "Campeões").length
-  const atRisk = rfvClients.filter((c) => c.segment === "Em Risco" || c.segment === "Hibernando").length
+  const atRisk = rfvClients.filter((c) =>
+    c.segment === "Em Risco" || c.segment === "Hibernando" ||
+    c.segment === "Não Perder" || c.segment === "Prestes a Hibernar" || c.segment === "Perdidos"
+  ).length
 
   // Dados para gráficos
   const segmentCounts = useMemo(() => {
@@ -246,6 +264,24 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
     toast({ title: "Produto removido" })
   }
 
+  // ── Paginação da tabela Clientes por Segmento ────────────────────────────────
+  const SEGMENT_PAGE_SIZE = 15
+  const [segmentPage, setSegmentPage] = useState(1)
+
+  const sortedRfvClients = useMemo(
+    () => [...rfvClients].sort((a, b) => b.score - a.score),
+    [rfvClients]
+  )
+  const segmentTotalPages = Math.max(1, Math.ceil(sortedRfvClients.length / SEGMENT_PAGE_SIZE))
+  const paginatedRfvClients = useMemo(
+    () => sortedRfvClients.slice((segmentPage - 1) * SEGMENT_PAGE_SIZE, segmentPage * SEGMENT_PAGE_SIZE),
+    [sortedRfvClients, segmentPage]
+  )
+
+  const handleSegmentPageChange = useCallback((page: number) => {
+    setSegmentPage(page)
+  }, [])
+
   // ── Filtered entries ─────────────────────────────────────────────────────────
   const filteredEntries = useMemo(() => {
     if (!search) return entries
@@ -299,7 +335,7 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
           {entries.length === 0 ? (
             <div className="flex flex-col items-center justify-center min-h-[300px] rounded-xl border border-border bg-card text-center gap-3">
               <FileBarChart2 className="h-10 w-10 text-muted-foreground/30" />
-              <p className="text-sm font-medium text-muted-foreground">Nenhuma transação cadastrada ainda.</p>
+              <p className="text-sm font-medium text-muted-foreground">Nenhuma transaç��o cadastrada ainda.</p>
               <Button variant="outline" size="sm" onClick={() => setActiveTab("clientes")}>
                 Cadastrar transação
               </Button>
@@ -314,9 +350,9 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
                   { label: "Ticket Médio", value: fmtValue(avgTicket), sub: "por cliente", icon: TrendingUp, bg: "bg-slate-50", color: "text-slate-600" },
                   { label: "Campeões", value: String(champions), sub: "clientes top", icon: Star, bg: "bg-emerald-50", color: "text-emerald-600" },
                   { label: "Em Risco / Hibernando", value: String(atRisk), sub: `${rfvClients.length ? Math.round((atRisk / rfvClients.length) * 100) : 0}% da base`, icon: AlertTriangle, bg: "bg-red-50", color: "text-red-500" },
-                  { label: "Potencial Upsell", value: String(rfvClients.filter((c) => ["Campeões","Fiéis","Promissores"].includes(c.segment)).length), sub: "elegíveis", icon: ArrowUpRight, bg: "bg-violet-50", color: "text-violet-600" },
-                  { label: "Clientes Ativos", value: `${rfvClients.length ? Math.round((rfvClients.filter((c) => c.recency >= 3).length / rfvClients.length) * 100) : 0}%`, sub: `${rfvClients.filter((c) => c.recency >= 3).length} clientes`, icon: UserCheck, bg: "bg-emerald-50", color: "text-emerald-600" },
-                  { label: "Janela de Recompra", value: String(rfvClients.filter((c) => c.recency >= 4 && c.frequency >= 2).length), sub: "prontos para renovar", icon: Target, bg: "bg-amber-50", color: "text-amber-600" },
+                  { label: "Potencial Upsell", value: String(rfvClients.filter((c) => ["Campeões","Clientes Fiéis","Potenciais"].includes(c.segment)).length), sub: "elegíveis", icon: ArrowUpRight, bg: "bg-violet-50", color: "text-violet-600" },
+                  { label: "Clientes Ativos", value: `${rfvClients.length ? Math.round((rfvClients.filter((c) => c.recency === 3).length / rfvClients.length) * 100) : 0}%`, sub: `${rfvClients.filter((c) => c.recency === 3).length} clientes`, icon: UserCheck, bg: "bg-emerald-50", color: "text-emerald-600" },
+                  { label: "Janela de Recompra", value: String(rfvClients.filter((c) => c.recency === 3 && c.frequency >= 2).length), sub: "prontos para renovar", icon: Target, bg: "bg-amber-50", color: "text-amber-600" },
                 ].map((card) => (
                   <div key={card.label} className="bg-card border border-border rounded-xl p-4 flex items-start justify-between gap-3">
                     <div>
@@ -416,41 +452,82 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
                       <TrendingUp className="h-4 w-4 text-accent" /> Matriz RFV
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="pb-4">
                     <div className="flex gap-2">
-                      {/* Eixo Y */}
-                      <div className="flex flex-col justify-center">
-                        <span className="text-[10px] text-muted-foreground [writing-mode:vertical-lr] rotate-180 text-center">
-                          Frequência e valor (regularidade e gasto)
+                      {/* Eixo Y label */}
+                      <div className="flex items-center justify-center w-5 shrink-0">
+                        <span className="text-[9px] font-medium text-muted-foreground [writing-mode:vertical-lr] rotate-180 text-center leading-none tracking-wide uppercase">
+                          Frequência e valor
                         </span>
                       </div>
-                      <div className="flex-1">
-                        <div className="grid grid-cols-3 gap-1.5">
-                          {[
-                            { label: "Não Perder",          seg: "Em Risco",             bg: "bg-red-400" },
-                            { label: "Clientes Fiéis",      seg: "Fiéis",                bg: "bg-emerald-400" },
-                            { label: "Campeões",            seg: "Campeões",             bg: "bg-emerald-500" },
-                            { label: "Em Risco",            seg: "Em Risco",             bg: "bg-amber-400" },
-                            { label: "Precisam de Atenção", seg: "Precisam de Atenção",  bg: "bg-orange-400" },
-                            { label: "Potenciais",          seg: "Promissores",          bg: "bg-violet-400" },
-                            { label: "Hibernando",          seg: "Hibernando",           bg: "bg-slate-400" },
-                            { label: "Prestes a Hibernar",  seg: "Hibernando",           bg: "bg-slate-300" },
-                            { label: "Perdidos",            seg: "Hibernando",           bg: "bg-slate-200" },
-                            { label: "Promissores",         seg: "Promissores",          bg: "bg-amber-300" },
-                            { label: "Novos",               seg: "Novos Clientes",       bg: "bg-violet-300" },
-                          ].slice(0, 9).map((cell) => {
-                            const count = matrixData[cell.seg as PortalRfvSegment] ?? 0
-                            const pct = rfvClients.length ? Math.round((count / rfvClients.length) * 100) : 0
-                            return (
-                              <div key={cell.label} className={cn("rounded-lg p-2 text-white", cell.bg)}>
-                                <p className="text-[10px] font-medium leading-tight">{cell.label}</p>
-                                <p className="text-lg font-bold mt-0.5">{count}</p>
-                                <p className="text-[10px] opacity-80">{pct}%</p>
+
+                      <div className="flex-1 flex flex-col gap-1">
+                        {/* Grid 3×3 com labels de FV à esquerda */}
+                        {MATRIX_GRID.map((row, rowIdx) => {
+                          const fvLabel = rowIdx === 0 ? "Alto" : rowIdx === 1 ? "Médio" : "Baixo"
+                          return (
+                            <div key={rowIdx} className="flex items-stretch gap-1">
+                              {/* Label FV */}
+                              <div className="flex items-center justify-center w-8 shrink-0">
+                                <span className="text-[9px] font-semibold text-muted-foreground [writing-mode:vertical-lr] rotate-180 text-center leading-none">
+                                  {fvLabel}
+                                </span>
                               </div>
-                            )
-                          })}
+                              {/* Células */}
+                              <div className="flex-1 grid grid-cols-3 gap-1">
+                                {row.map((cell) => {
+                                  const count = matrixData[cell.seg] ?? 0
+                                  const pct = rfvClients.length
+                                    ? Math.round((count / rfvClients.length) * 100)
+                                    : 0
+                                  const textColor = cell.matrixText === "#555" ? "#555" : "#fff"
+                                  return (
+                                    <div
+                                      key={cell.seg}
+                                      className="rounded-xl p-2.5 flex flex-col justify-between min-h-[72px]"
+                                      style={{ backgroundColor: cell.matrixBg }}
+                                    >
+                                      <p
+                                        className="text-[10px] font-semibold leading-tight"
+                                        style={{ color: textColor, opacity: 0.9 }}
+                                      >
+                                        {cell.label}
+                                      </p>
+                                      <div>
+                                        <p
+                                          className="text-xl font-bold leading-none"
+                                          style={{ color: textColor }}
+                                        >
+                                          {count}
+                                        </p>
+                                        <p
+                                          className="text-[10px] font-medium mt-0.5"
+                                          style={{ color: textColor, opacity: 0.7 }}
+                                        >
+                                          {pct}%
+                                        </p>
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          )
+                        })}
+
+                        {/* Eixo X labels das colunas */}
+                        <div className="flex gap-1 mt-1">
+                          <div className="w-8 shrink-0" />
+                          <div className="flex-1 grid grid-cols-3 gap-1">
+                            {["Antigo", "Médio", "Recente"].map((label) => (
+                              <p key={label} className="text-[9px] font-semibold text-muted-foreground text-center uppercase tracking-wide">
+                                {label}
+                              </p>
+                            ))}
+                          </div>
                         </div>
-                        <p className="text-[10px] text-muted-foreground text-center mt-2">
+
+                        <p className="text-[10px] text-muted-foreground text-center mt-0.5">
                           Recência (quão recentemente o cliente comprou)
                         </p>
                       </div>
@@ -462,7 +539,12 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
               {/* Tabela de clientes RFV */}
               <Card className="border-border">
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-semibold">Clientes por Segmento</CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm font-semibold">Clientes por Segmento</CardTitle>
+                    <span className="text-xs text-muted-foreground">
+                      {sortedRfvClients.length} clientes
+                    </span>
+                  </div>
                 </CardHeader>
                 <CardContent className="p-0">
                   <div className="overflow-x-auto">
@@ -479,34 +561,84 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
                         </tr>
                       </thead>
                       <tbody>
-                        {rfvClients
-                          .sort((a, b) => b.score - a.score)
-                          .map((c) => {
-                            const colors = PORTAL_SEGMENT_COLORS[c.segment]
-                            return (
-                              <tr key={c.customerName} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                                <td className="px-4 py-3 font-medium text-foreground">{c.customerName}</td>
-                                <td className="px-4 py-3">
-                                  <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium", colors.bg, colors.text)}>
-                                    <span className={cn("w-1.5 h-1.5 rounded-full", colors.dot)} />
-                                    {c.segment}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-3 text-right font-semibold text-foreground">{fmtValue(c.totalValue)}</td>
-                                <td className="px-4 py-3 text-center text-muted-foreground">{c.recency}</td>
-                                <td className="px-4 py-3 text-center text-muted-foreground">{c.frequency}</td>
-                                <td className="px-4 py-3 text-center text-muted-foreground">{c.monetary}</td>
-                                <td className="px-4 py-3 text-center">
-                                  <span className={cn("font-bold", c.score >= 4 ? "text-emerald-600" : c.score >= 3 ? "text-amber-500" : "text-red-500")}>
-                                    {c.score.toFixed(1)}
-                                  </span>
-                                </td>
-                              </tr>
-                            )
-                          })}
+                        {paginatedRfvClients.map((c) => {
+                          const colors = PORTAL_SEGMENT_COLORS[c.segment]
+                          return (
+                            <tr key={c.customerName} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                              <td className="px-4 py-3 font-medium text-foreground">{c.customerName}</td>
+                              <td className="px-4 py-3">
+                                <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium", colors.bg, colors.text)}>
+                                  <span className={cn("w-1.5 h-1.5 rounded-full", colors.dot)} />
+                                  {c.segment}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-right font-semibold text-foreground">{fmtValue(c.totalValue)}</td>
+                              <td className="px-4 py-3 text-center text-muted-foreground">{c.recency}</td>
+                              <td className="px-4 py-3 text-center text-muted-foreground">{c.frequency}</td>
+                              <td className="px-4 py-3 text-center text-muted-foreground">{c.monetary}</td>
+                              <td className="px-4 py-3 text-center">
+                                <span className={cn("font-bold", c.score >= 2.5 ? "text-emerald-600" : c.score >= 1.8 ? "text-amber-500" : "text-red-500")}>
+                                  {c.score.toFixed(1)}
+                                </span>
+                              </td>
+                            </tr>
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>
+
+                  {/* Paginação */}
+                  {segmentTotalPages > 1 && (
+                    <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+                      <p className="text-xs text-muted-foreground">
+                        Página {segmentPage} de {segmentTotalPages} · {sortedRfvClients.length} clientes
+                      </p>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleSegmentPageChange(segmentPage - 1)}
+                          disabled={segmentPage === 1}
+                          className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                          aria-label="Página anterior"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </button>
+                        {Array.from({ length: segmentTotalPages }, (_, i) => i + 1)
+                          .filter((p) => p === 1 || p === segmentTotalPages || Math.abs(p - segmentPage) <= 1)
+                          .reduce<(number | "...")[]>((acc, p, idx, arr) => {
+                            if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push("...")
+                            acc.push(p)
+                            return acc
+                          }, [])
+                          .map((item, idx) =>
+                            item === "..." ? (
+                              <span key={`ellipsis-${idx}`} className="px-1 text-xs text-muted-foreground">…</span>
+                            ) : (
+                              <button
+                                key={item}
+                                onClick={() => handleSegmentPageChange(item as number)}
+                                className={cn(
+                                  "min-w-[28px] h-7 px-1.5 rounded-md text-xs font-medium transition-colors",
+                                  segmentPage === item
+                                    ? "bg-primary text-primary-foreground"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                                )}
+                              >
+                                {item}
+                              </button>
+                            )
+                          )}
+                        <button
+                          onClick={() => handleSegmentPageChange(segmentPage + 1)}
+                          disabled={segmentPage === segmentTotalPages}
+                          className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                          aria-label="Próxima página"
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </>
@@ -517,12 +649,24 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
       {/* ── CLIENTES ──────────────────────────────────────────────────────────── */}
       {activeTab === "clientes" && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="relative flex-1 max-w-xs">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="relative flex-1 min-w-[200px] max-w-xs">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input placeholder="Buscar cliente ou produto..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              {selectedIds.size > 0 && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleBulkDelete}
+                  disabled={bulkDeleting}
+                  className="gap-2"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  {bulkDeleting ? "Removendo..." : `Excluir ${selectedIds.size} selecionado(s)`}
+                </Button>
+              )}
               <Button variant="outline" onClick={() => setImportModal(true)} className="gap-2">
                 <Upload className="h-4 w-4" /> Importar
               </Button>
@@ -546,6 +690,15 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-border">
+                        <th className="px-4 py-3 w-10">
+                          <input
+                            type="checkbox"
+                            className="rounded border-border cursor-pointer accent-primary"
+                            checked={filteredEntries.length > 0 && filteredEntries.every((e) => selectedIds.has(e.id))}
+                            onChange={() => toggleSelectAll(filteredEntries.map((e) => e.id))}
+                            aria-label="Selecionar todos"
+                          />
+                        </th>
                         <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground">Cliente</th>
                         <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground">Produto/Serviço</th>
                         <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground">Valor</th>
@@ -555,25 +708,43 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredEntries.map((e) => (
-                        <tr key={e.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                          <td className="px-4 py-3 font-medium text-foreground">{e.customer_name}</td>
-                          <td className="px-4 py-3 text-muted-foreground">{e.product_name}</td>
-                          <td className="px-4 py-3 text-right font-semibold text-foreground">{fmtValue(Number(e.value))}</td>
-                          <td className="px-4 py-3 text-muted-foreground">{PAYMENT_LABELS[e.payment_method] ?? e.payment_method}</td>
-                          <td className="px-4 py-3 text-muted-foreground">{new Date(e.purchase_date + "T00:00:00").toLocaleDateString("pt-BR")}</td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center justify-center gap-2">
-                              <button onClick={() => openEntryEdit(e)} className="text-muted-foreground hover:text-foreground transition-colors">
-                                <Pencil className="h-3.5 w-3.5" />
-                              </button>
-                              <button onClick={() => handleEntryDelete(e.id)} className="text-muted-foreground hover:text-destructive transition-colors">
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
+                      {filteredEntries.map((e) => {
+                        const isSelected = selectedIds.has(e.id)
+                        return (
+                          <tr
+                            key={e.id}
+                            className={cn(
+                              "border-b border-border/50 hover:bg-muted/30 transition-colors",
+                              isSelected && "bg-primary/5"
+                            )}
+                          >
+                            <td className="px-4 py-3">
+                              <input
+                                type="checkbox"
+                                className="rounded border-border cursor-pointer accent-primary"
+                                checked={isSelected}
+                                onChange={() => toggleSelect(e.id)}
+                                aria-label={`Selecionar ${e.customer_name}`}
+                              />
+                            </td>
+                            <td className="px-4 py-3 font-medium text-foreground">{e.customer_name}</td>
+                            <td className="px-4 py-3 text-muted-foreground">{e.product_name}</td>
+                            <td className="px-4 py-3 text-right font-semibold text-foreground">{fmtValue(Number(e.value))}</td>
+                            <td className="px-4 py-3 text-muted-foreground">{PAYMENT_LABELS[e.payment_method] ?? e.payment_method}</td>
+                            <td className="px-4 py-3 text-muted-foreground">{new Date(e.purchase_date + "T00:00:00").toLocaleDateString("pt-BR")}</td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center justify-center gap-2">
+                                <button onClick={() => openEntryEdit(e)} className="text-muted-foreground hover:text-foreground transition-colors">
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </button>
+                                <button onClick={() => handleEntryDelete(e.id)} className="text-muted-foreground hover:text-destructive transition-colors">
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
