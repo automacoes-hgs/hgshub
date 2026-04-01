@@ -10,7 +10,7 @@ export default async function PortalDashboardPage() {
     supabase.from("user_tools").select("tool, enabled").eq("user_id", user!.id),
     supabase.from("bdr_members").select("id, name, is_active").eq("owner_id", user!.id),
     supabase.from("client_goals").select("id, title, target_value, current_value, unit, status").eq("owner_id", user!.id).eq("status", "active").limit(3),
-    supabase.from("client_rfv_entries").select("customer_name, value, purchase_date, product_name").eq("owner_id", user!.id),
+    supabase.from("client_rfv_entries").select("customer_name, value, purchase_date, product_name").eq("owner_id", user!.id).limit(5000),
   ])
 
   const rfvEnabled = toolsRes.data?.some((t) => t.tool === "rfv_analysis" && t.enabled) ?? false

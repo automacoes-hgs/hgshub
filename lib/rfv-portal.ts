@@ -116,16 +116,15 @@ export function computePortalRfv(entries: PortalRfvEntry[]): PortalClientRfv[] {
     byCustomer.get(key)!.push(e)
   }
 
-  // Data de referência = hoje ou data mais recente dos dados (o que for maior)
-  const allTimestamps = entries.map((e) => new Date(e.purchase_date + "T00:00:00").getTime())
-  const referenceDate = Math.max(Date.now(), ...allTimestamps)
+  // Data de referência = sempre hoje (independente dos dados importados)
+  const referenceDate = Date.now()
 
   // Passo 1: agregar R, F, V brutos por cliente
   type Raw = {
     customerName: string
     entries: PortalRfvEntry[]
     recencyDays: number
-    orderCount: number
+    orderCount: number   // total de linhas/produtos comprados (não datas únicas)
     totalValue: number
     lastPurchaseDate: string
     firstPurchaseDate: string
@@ -133,11 +132,11 @@ export function computePortalRfv(entries: PortalRfvEntry[]): PortalClientRfv[] {
 
   const rawList: Raw[] = Array.from(byCustomer.entries()).map(([, customerEntries]) => {
     const customerName = customerEntries[0].customer_name.trim()
-    const uniqueDates = [...new Set(customerEntries.map((e) => e.purchase_date))].sort()
-    const orderCount = uniqueDates.length
+    const sortedDates = [...customerEntries].map((e) => e.purchase_date).sort()
+    const orderCount = customerEntries.length                                    // total de produtos/linhas
     const totalValue = customerEntries.reduce((s, e) => s + Number(e.value), 0)
-    const lastPurchaseDate = uniqueDates[uniqueDates.length - 1]
-    const firstPurchaseDate = uniqueDates[0]
+    const lastPurchaseDate = sortedDates[sortedDates.length - 1]
+    const firstPurchaseDate = sortedDates[0]
     const recencyDays = Math.round(
       (referenceDate - new Date(lastPurchaseDate + "T00:00:00").getTime()) / 86400000
     )
