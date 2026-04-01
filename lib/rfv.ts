@@ -25,7 +25,15 @@ export type ClientRfv = {
   clientSince: string  // YYYY-MM-DD da compra mais antiga
 }
 
-/** Recência: dias desde o último contrato ativo ou a data mais recente */
+/**
+ * Recência: dias desde a última compra.
+ * Calibrado para ciclos B2B (contratos anuais/semestrais).
+ *   ≤ 60 dias  → 5  (comprou agora)
+ *   ≤ 180 dias → 4  (comprou recentemente)
+ *   ≤ 365 dias → 3  (comprou no último ano)
+ *   ≤ 730 dias → 2  (comprou há 1–2 anos)
+ *   > 730 dias → 1  (inativo há muito tempo)
+ */
 function recencyScore(contracts: Contract[]): number {
   const sortedDates = [...contracts]
     .map((c) => c.purchase_date)
@@ -34,68 +42,86 @@ function recencyScore(contracts: Contract[]): number {
   const daysSince = Math.round(
     (Date.now() - new Date(lastDate).getTime()) / (1000 * 60 * 60 * 24)
   )
-  if (daysSince <= 30) return 5
-  if (daysSince <= 90) return 4
-  if (daysSince <= 180) return 3
-  if (daysSince <= 365) return 2
+  if (daysSince <= 60)  return 5
+  if (daysSince <= 180) return 4
+  if (daysSince <= 365) return 3
+  if (daysSince <= 730) return 2
   return 1
 }
 
-/** Frequência: nº de contratos */
+/**
+ * Frequência: nº de contratos/pedidos.
+ * Calibrado para B2B onde cada contrato é um evento significativo.
+ *   ≥ 8 contratos → 5
+ *   ≥ 5 contratos → 4
+ *   ≥ 3 contratos → 3
+ *   ≥ 2 contratos → 2
+ *   1 contrato    → 1
+ */
 function frequencyScore(contracts: Contract[]): number {
   const count = contracts.length
-  if (count >= 10) return 5
-  if (count >= 6) return 4
+  if (count >= 8) return 5
+  if (count >= 5) return 4
   if (count >= 3) return 3
   if (count >= 2) return 2
   return 1
 }
 
-/** Monetário: valor total */
+/**
+ * Monetário: valor total acumulado.
+ * Calibrado para ticket B2B.
+ *   ≥ R$ 150.000 → 5
+ *   ≥ R$  60.000 → 4
+ *   ≥ R$  20.000 → 3
+ *   ≥ R$   5.000 → 2
+ *   < R$   5.000 → 1
+ */
 function monetaryScore(totalValue: number): number {
-  if (totalValue >= 200000) return 5
-  if (totalValue >= 80000) return 4
-  if (totalValue >= 30000) return 3
-  if (totalValue >= 10000) return 2
+  if (totalValue >= 150_000) return 5
+  if (totalValue >= 60_000)  return 4
+  if (totalValue >= 20_000)  return 3
+  if (totalValue >= 5_000)   return 2
   return 1
 }
 
 /**
- * Matriz RFV 5×5 → 8 segmentos
- * Baseada nas combinações observadas nos dados reais:
+ * Segmentação RFV baseada em score total (R+F+M, max=15) e regras de R/F.
  *
- *  Campeões          R4-5, F4-5, M4-5  — compra recente, alta freq e valor
- *  Fiéis             R4-5, F3+         — recentes e frequentes (qualquer M)
- *  Promissores       R4-5, F2          — recentes, pouco freq, qualquer M
- *  Novos Clientes    R5,   F1          — 1ª compra muito recente
- *  Iniciantes        R4,   F1          — 1ª compra recente
- *  Precisam Atenção  R3,   F2+         — recência média com engajamento
- *  Em Risco          R1-2, F2+         — sumiram mas foram ativos
- *  Hibernando        F1 + R1-3         — 1 pedido só, ou R baixo com F1
+ * Regras (em ordem de prioridade):
+ *   Campeões          total >= 13 AND r >= 4              — alto valor, recente, frequente
+ *   Novos Clientes    r === 5 AND f === 1                  — 1ª compra muito recente
+ *   Iniciantes        r === 4 AND f === 1                  — 1ª compra recente
+ *   Fiéis             r >= 3 AND f >= 3 AND total >= 9     — consistentes e fiéis
+ *   Promissores       r >= 3 AND f >= 2                    — recentes, crescendo
+ *   Precisam Atenção  r === 3                              — recência média
+ *   Em Risco          r <= 2 AND f >= 2                    — sumiram mas foram ativos
+ *   Hibernando        demais casos                         — baixa atividade geral
  */
 function deriveSegment(r: number, f: number, m: number): RfvSegment {
-  // Campeões: recentes, frequentes e alto valor
-  if (r >= 4 && f >= 4 && m >= 4) return "Campeões"
+  const total = r + f + m
 
-  // Novos Clientes: 1ª compra muito recente (R5)
+  // Campeões: score alto + recência boa
+  if (total >= 13 && r >= 4) return "Campeões"
+
+  // Novos Clientes: 1ª compra muito recente
   if (r === 5 && f === 1) return "Novos Clientes"
 
-  // Iniciantes: 1ª compra recente (R4)
+  // Iniciantes: 1ª compra recente
   if (r === 4 && f === 1) return "Iniciantes"
 
-  // Fiéis: recência alta + frequência média-alta (F3+)
-  if (r >= 4 && f >= 3) return "Fiéis"
+  // Fiéis: consistentes — recência decente + alta frequência + score bom
+  if (r >= 3 && f >= 3 && total >= 9) return "Fiéis"
 
-  // Promissores: recência alta + 2ª compra (não é campeão/fiel/novo)
-  if (r >= 4 && f >= 2) return "Promissores"
+  // Promissores: recentes com alguma frequência
+  if (r >= 3 && f >= 2) return "Promissores"
 
-  // Precisam de Atenção: recência média + algum engajamento
+  // Precisam de Atenção: recência média, pouca atividade
   if (r === 3) return "Precisam de Atenção"
 
-  // Em Risco: sumiram mas tiveram histórico
+  // Em Risco: sumiram mas tiveram histórico real
   if (r <= 2 && f >= 2) return "Em Risco"
 
-  // Hibernando: baixa recência + primeiro e único pedido
+  // Hibernando: todos os demais
   return "Hibernando"
 }
 
