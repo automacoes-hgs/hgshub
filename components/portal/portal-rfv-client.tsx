@@ -24,7 +24,7 @@ import {
 } from "recharts"
 import {
   computePortalRfv, PORTAL_SEGMENT_COLORS, PORTAL_SEGMENT_ORDER,
-  SEGMENT_CHART_COLORS, MATRIX_GRID, fmtValue, PAYMENT_LABELS,
+  SEGMENT_CHART_COLORS, fmtValue, PAYMENT_LABELS,
   type PortalRfvEntry, type PortalRfvSegment,
 } from "@/lib/rfv-portal"
 import { cn } from "@/lib/utils"
@@ -295,7 +295,7 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
           {entries.length === 0 ? (
             <div className="flex flex-col items-center justify-center min-h-[300px] rounded-xl border border-border bg-card text-center gap-3">
               <FileBarChart2 className="h-10 w-10 text-muted-foreground/30" />
-              <p className="text-sm font-medium text-muted-foreground">Nenhuma transação cadastrada ainda.</p>
+              <p className="text-sm font-medium text-muted-foreground">Nenhuma transaç��o cadastrada ainda.</p>
               <Button variant="outline" size="sm" onClick={() => setActiveTab("clientes")}>
                 Cadastrar transação
               </Button>
@@ -420,55 +420,74 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
                           Frequência e valor (regularidade e gasto)
                         </span>
                       </div>
-                      <div className="flex-1">
-                        {/* Grid 3×3 principal */}
+                      <div className="flex-1 flex flex-col gap-1.5">
+
+                        {/* Linha 1: Não Perder | Clientes Fiéis | Campeões */}
                         <div className="grid grid-cols-3 gap-1.5">
-                          {MATRIX_GRID.flat().map((cell) => {
+                          {(
+                            [
+                              { label: "Não Perder",    seg: "Não Perder"    as PortalRfvSegment, bg: "#E74C3C" },
+                              { label: "Clientes Fiéis",seg: "Clientes Fiéis"as PortalRfvSegment, bg: "#2ECC71" },
+                              { label: "Campeões",      seg: "Campeões"      as PortalRfvSegment, bg: "#27AE60" },
+                            ] as const
+                          ).map((cell) => {
                             const count = matrixData[cell.seg] ?? 0
                             const pct = rfvClients.length ? Math.round((count / rfvClients.length) * 100) : 0
                             return (
-                              <div
-                                key={cell.label}
-                                className="rounded-lg p-2"
-                                style={{ backgroundColor: cell.matrixBg, color: cell.matrixText }}
-                              >
-                                <p className="text-[10px] font-medium leading-tight">{cell.label}</p>
-                                <p className="text-lg font-bold mt-0.5">{count}</p>
+                              <div key={cell.label} className="rounded-lg p-3 text-white" style={{ backgroundColor: cell.bg }}>
+                                <p className="text-[11px] font-semibold leading-tight">{cell.label}</p>
+                                <p className="text-2xl font-bold mt-1">{count}</p>
                                 <p className="text-[10px] opacity-80">{pct}%</p>
                               </div>
                             )
                           })}
                         </div>
-                        {/* Linha extra: Promissores + Novos (fora do grid 3×3 do spec) */}
-                        {(() => {
-                          const extras = [
-                            { label: "Promissores", seg: "Promissores" as PortalRfvSegment, matrixBg: "#3498DB", matrixText: "#fff" },
-                            { label: "Novos",       seg: "Novos"       as PortalRfvSegment, matrixBg: "#1ABC9C", matrixText: "#fff" },
-                          ]
-                          const hasExtras = extras.some((e) => (matrixData[e.seg] ?? 0) > 0)
-                          if (!hasExtras) return null
-                          return (
-                            <div className="grid grid-cols-3 gap-1.5 mt-1.5">
-                              <div /> {/* espaço coluna 1 */}
-                              {extras.map((cell) => {
-                                const count = matrixData[cell.seg] ?? 0
-                                const pct = rfvClients.length ? Math.round((count / rfvClients.length) * 100) : 0
-                                return (
-                                  <div
-                                    key={cell.label}
-                                    className="rounded-lg p-2"
-                                    style={{ backgroundColor: cell.matrixBg, color: cell.matrixText }}
-                                  >
-                                    <p className="text-[10px] font-medium leading-tight">{cell.label}</p>
-                                    <p className="text-lg font-bold mt-0.5">{count}</p>
-                                    <p className="text-[10px] opacity-80">{pct}%</p>
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          )
-                        })()}
-                        <p className="text-[10px] text-muted-foreground text-center mt-2">
+
+                        {/* Linha 2: Em Risco | Precisam de Atenção | Potenciais */}
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {(
+                            [
+                              { label: "Em Risco",             seg: "Em Risco"            as PortalRfvSegment, bg: "#F39C12" },
+                              { label: "Precisam de Atenção",  seg: "Precisam de Atenção" as PortalRfvSegment, bg: "#E67E22" },
+                              { label: "Potenciais",           seg: "Potenciais"          as PortalRfvSegment, bg: "#5DADE2" },
+                            ] as const
+                          ).map((cell) => {
+                            const count = matrixData[cell.seg] ?? 0
+                            const pct = rfvClients.length ? Math.round((count / rfvClients.length) * 100) : 0
+                            return (
+                              <div key={cell.label} className="rounded-lg p-3 text-white" style={{ backgroundColor: cell.bg }}>
+                                <p className="text-[11px] font-semibold leading-tight">{cell.label}</p>
+                                <p className="text-2xl font-bold mt-1">{count}</p>
+                                <p className="text-[10px] opacity-80">{pct}%</p>
+                              </div>
+                            )
+                          })}
+                        </div>
+
+                        {/* Linha 3: Hibernando | Prestes a Hibernar | Perdidos | Promissores | Novos */}
+                        <div className="grid grid-cols-5 gap-1.5">
+                          {(
+                            [
+                              { label: "Hibernando",         seg: "Hibernando"         as PortalRfvSegment, bg: "#95A5A6" },
+                              { label: "Prestes a Hibernar", seg: "Prestes a Hibernar" as PortalRfvSegment, bg: "#7F8C8D" },
+                              { label: "Perdidos",           seg: "Perdidos"           as PortalRfvSegment, bg: "#BDC3C7" },
+                              { label: "Promissores",        seg: "Promissores"        as PortalRfvSegment, bg: "#3498DB" },
+                              { label: "Novos",              seg: "Novos"              as PortalRfvSegment, bg: "#1ABC9C" },
+                            ] as const
+                          ).map((cell) => {
+                            const count = matrixData[cell.seg] ?? 0
+                            const pct = rfvClients.length ? Math.round((count / rfvClients.length) * 100) : 0
+                            return (
+                              <div key={cell.label} className="rounded-lg p-2 text-white" style={{ backgroundColor: cell.bg }}>
+                                <p className="text-[10px] font-semibold leading-tight">{cell.label}</p>
+                                <p className="text-xl font-bold mt-1">{count}</p>
+                                <p className="text-[10px] opacity-80">{pct}%</p>
+                              </div>
+                            )
+                          })}
+                        </div>
+
+                        <p className="text-[10px] text-muted-foreground text-center mt-1">
                           Recência (quão recentemente o cliente comprou)
                         </p>
                       </div>
