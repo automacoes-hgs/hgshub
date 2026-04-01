@@ -278,25 +278,6 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
     toast({ title: "Produto removido" })
   }
 
-  // ── Paginação da tabela Clientes por Segmento ────────────────────────────────
-  const SEGMENT_PAGE_SIZE = 15
-  const [segmentPage, setSegmentPage] = useState(1)
-
-  const sortedRfvClients = useMemo(
-    () => [...rfvClients].sort((a, b) => b.score - a.score),
-    [rfvClients]
-  )
-  const segmentTotalPages = Math.max(1, Math.ceil(sortedRfvClients.length / SEGMENT_PAGE_SIZE))
-  const paginatedRfvClients = useMemo(
-    () => sortedRfvClients.slice((segmentPage - 1) * SEGMENT_PAGE_SIZE, segmentPage * SEGMENT_PAGE_SIZE),
-    [sortedRfvClients, segmentPage]
-  )
-
-  const handleSegmentPageChange = useCallback((page: number) => {
-    setSegmentPage(page)
-  }, [])
-
-  // ── Filtered entries ─────────────────────────────────────────────────────────
   const filteredEntries = useMemo(() => {
     if (!search) return entries
     const q = search.toLowerCase()
@@ -550,111 +531,6 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
                 </Card>
               </div>
 
-              {/* Tabela de clientes RFV */}
-              <Card className="border-border">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm font-semibold">Clientes por Segmento</CardTitle>
-                    <span className="text-xs text-muted-foreground">
-                      {sortedRfvClients.length} clientes
-                    </span>
-                  </div>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-border">
-                          <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground">Cliente</th>
-                          <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground">Segmento</th>
-                          <th className="text-right px-4 py-2.5 text-xs font-semibold text-muted-foreground">Total</th>
-                          <th className="text-center px-4 py-2.5 text-xs font-semibold text-muted-foreground">R</th>
-                          <th className="text-center px-4 py-2.5 text-xs font-semibold text-muted-foreground">F</th>
-                          <th className="text-center px-4 py-2.5 text-xs font-semibold text-muted-foreground">V</th>
-                          <th className="text-center px-4 py-2.5 text-xs font-semibold text-muted-foreground">Score</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {paginatedRfvClients.map((c) => {
-                          const colors = PORTAL_SEGMENT_COLORS[c.segment]
-                          return (
-                            <tr key={c.customerName} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                              <td className="px-4 py-3 font-medium text-foreground">{c.customerName}</td>
-                              <td className="px-4 py-3">
-                                <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium", colors.bg, colors.text)}>
-                                  <span className={cn("w-1.5 h-1.5 rounded-full", colors.dot)} />
-                                  {c.segment}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 text-right font-semibold text-foreground">{fmtValue(c.totalValue)}</td>
-                              <td className="px-4 py-3 text-center text-muted-foreground">{c.recency}</td>
-                              <td className="px-4 py-3 text-center text-muted-foreground">{c.frequency}</td>
-                              <td className="px-4 py-3 text-center text-muted-foreground">{c.monetary}</td>
-                              <td className="px-4 py-3 text-center">
-                                <span className={cn("font-bold", c.score >= 4.0 ? "text-emerald-600" : c.score >= 2.5 ? "text-amber-500" : "text-red-500")}>
-                                  {c.score.toFixed(1)}
-                                </span>
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Paginação */}
-                  {segmentTotalPages > 1 && (
-                    <div className="flex items-center justify-between px-4 py-3 border-t border-border">
-                      <p className="text-xs text-muted-foreground">
-                        Página {segmentPage} de {segmentTotalPages} · {sortedRfvClients.length} clientes
-                      </p>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => handleSegmentPageChange(segmentPage - 1)}
-                          disabled={segmentPage === 1}
-                          className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                          aria-label="Página anterior"
-                        >
-                          <ChevronLeft className="h-4 w-4" />
-                        </button>
-                        {Array.from({ length: segmentTotalPages }, (_, i) => i + 1)
-                          .filter((p) => p === 1 || p === segmentTotalPages || Math.abs(p - segmentPage) <= 1)
-                          .reduce<(number | "...")[]>((acc, p, idx, arr) => {
-                            if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push("...")
-                            acc.push(p)
-                            return acc
-                          }, [])
-                          .map((item, idx) =>
-                            item === "..." ? (
-                              <span key={`ellipsis-${idx}`} className="px-1 text-xs text-muted-foreground">…</span>
-                            ) : (
-                              <button
-                                key={item}
-                                onClick={() => handleSegmentPageChange(item as number)}
-                                className={cn(
-                                  "min-w-[28px] h-7 px-1.5 rounded-md text-xs font-medium transition-colors",
-                                  segmentPage === item
-                                    ? "bg-primary text-primary-foreground"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                                )}
-                              >
-                                {item}
-                              </button>
-                            )
-                          )}
-                        <button
-                          onClick={() => handleSegmentPageChange(segmentPage + 1)}
-                          disabled={segmentPage === segmentTotalPages}
-                          className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                          aria-label="Próxima página"
-                        >
-                          <ChevronRight className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
             </>
           )}
         </div>
