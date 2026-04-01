@@ -58,7 +58,7 @@ const EMPTY_PRODUCT: ProductForm = { name: "", description: "", category: "", pr
 
 // ─── Componente principal ────────────────────────────────────────────────────
 export function PortalRfvClient({ ownerId, entries: initialEntries, products: initialProducts }: Props) {
-  const [activeTab, setActiveTab] = useState<"clientes" | "transacoes" | "produtos" | "relatorio">("relatorio")
+  const [activeTab, setActiveTab] = useState<"transacoes" | "produtos" | "relatorio">("relatorio")
   const [entries, setEntries] = useState(initialEntries)
   const [products, setProducts] = useState(initialProducts)
   const [, startTransition] = useTransition()
@@ -302,25 +302,10 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
     )
   }, [entries, search])
 
-  // ── Modal de detalhe do cliente ──────────────────────────────────────────────
-  const [clientDetailName, setClientDetailName] = useState<string | null>(null)
-  const clientDetail = useMemo(
-    () => rfvClients.find((c) => c.customerName === clientDetailName) ?? null,
-    [rfvClients, clientDetailName]
-  )
-
-  // ── Clientes agrupados filtrados ──────────────────────────────────────────────
-  const filteredRfvClients = useMemo(() => {
-    if (!search) return sortedRfvClients
-    const q = search.toLowerCase()
-    return sortedRfvClients.filter((c) => c.customerName.toLowerCase().includes(q))
-  }, [sortedRfvClients, search])
-
   // ── Tabs ─────────────────────────────────────────────────────────────────────
   const tabs = [
     { key: "relatorio" as const, label: "Relatório", icon: BarChart3 },
-    { key: "clientes" as const, label: "Clientes", icon: Users },
-    { key: "transacoes" as const, label: "Transações", icon: FileBarChart2 },
+    { key: "transacoes" as const, label: "Clientes", icon: Users },
     { key: "produtos" as const, label: "Produtos / Serviços", icon: Package },
   ]
 
@@ -672,84 +657,7 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
         </div>
       )}
 
-      {/* ── CLIENTES (agrupado por cliente) ───────────────────────────────────── */}
-      {activeTab === "clientes" && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="relative flex-1 min-w-[200px] max-w-xs">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Buscar cliente..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
-            </div>
-            <p className="text-xs text-muted-foreground ml-auto">{filteredRfvClients.length} clientes</p>
-          </div>
-
-          {filteredRfvClients.length === 0 ? (
-            <div className="flex flex-col items-center justify-center min-h-[280px] rounded-xl border border-border bg-card text-center gap-3">
-              <Users className="h-10 w-10 text-muted-foreground/30" />
-              <p className="text-sm font-medium text-muted-foreground">
-                {search ? "Nenhum cliente encontrado." : "Nenhuma transação cadastrada."}
-              </p>
-            </div>
-          ) : (
-            <Card className="border-border">
-              <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border">
-                        <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground">Cliente</th>
-                        <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground">Segmento</th>
-                        <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground">Total investido</th>
-                        <th className="text-center px-4 py-3 text-xs font-semibold text-muted-foreground">Compras</th>
-                        <th className="text-center px-4 py-3 text-xs font-semibold text-muted-foreground">R</th>
-                        <th className="text-center px-4 py-3 text-xs font-semibold text-muted-foreground">F</th>
-                        <th className="text-center px-4 py-3 text-xs font-semibold text-muted-foreground">V</th>
-                        <th className="text-center px-4 py-3 text-xs font-semibold text-muted-foreground">Score</th>
-                        <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground">Última compra</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredRfvClients.map((c) => {
-                        const colors = PORTAL_SEGMENT_COLORS[c.segment]
-                        return (
-                          <tr
-                            key={c.customerName}
-                            className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer"
-                            onClick={() => setClientDetailName(c.customerName)}
-                          >
-                            <td className="px-4 py-3 font-medium text-foreground">{c.customerName}</td>
-                            <td className="px-4 py-3">
-                              <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium", colors.bg, colors.text)}>
-                                <span className={cn("w-1.5 h-1.5 rounded-full", colors.dot)} />
-                                {c.segment}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-right font-semibold text-foreground">{fmtValue(c.totalValue)}</td>
-                            <td className="px-4 py-3 text-center text-muted-foreground">{c.orderCount}</td>
-                            <td className="px-4 py-3 text-center text-muted-foreground">{c.recency}</td>
-                            <td className="px-4 py-3 text-center text-muted-foreground">{c.frequency}</td>
-                            <td className="px-4 py-3 text-center text-muted-foreground">{c.monetary}</td>
-                            <td className="px-4 py-3 text-center">
-                              <span className={cn("font-bold", c.score >= 4.0 ? "text-emerald-600" : c.score >= 2.5 ? "text-amber-500" : "text-red-500")}>
-                                {c.score.toFixed(1)}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-muted-foreground text-xs">
-                              {new Date(c.lastPurchaseDate + "T00:00:00").toLocaleDateString("pt-BR")}
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      )}
-
-      {/* ── TRANSAÇÕES (linhas brutas) ─────────────────────────────────────────── */}
+      {/* ── CLIENTES / TRANSAÇÕES ─────────────────────────────────────────────── */}
       {activeTab === "transacoes" && (
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -890,93 +798,6 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
           )}
         </div>
       )}
-
-      {/* ── MODAL DETALHE DO CLIENTE ──────────────────────────────────────────── */}
-      <Dialog open={!!clientDetail} onOpenChange={(open) => { if (!open) setClientDetailName(null) }}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-          {clientDetail && (() => {
-            const colors = PORTAL_SEGMENT_COLORS[clientDetail.segment]
-            return (
-              <>
-                <DialogHeader>
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <DialogTitle className="text-lg font-bold">{clientDetail.customerName}</DialogTitle>
-                    <span className={cn("inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold", colors.bg, colors.text)}>
-                      <span className={cn("w-1.5 h-1.5 rounded-full", colors.dot)} />
-                      {clientDetail.segment}
-                    </span>
-                  </div>
-                </DialogHeader>
-
-                {/* Scores */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-2">
-                  {[
-                    { label: "Recência", value: clientDetail.recency, color: "text-blue-600" },
-                    { label: "Frequência", value: clientDetail.frequency, color: "text-emerald-600" },
-                    { label: "Valor", value: clientDetail.monetary, color: "text-amber-600" },
-                    { label: "Score RFV", value: clientDetail.score.toFixed(1), color: clientDetail.score >= 4 ? "text-emerald-600" : clientDetail.score >= 2.5 ? "text-amber-500" : "text-red-500" },
-                  ].map(({ label, value, color }) => (
-                    <div key={label} className="rounded-xl border border-border bg-card p-3 text-center">
-                      <p className={cn("text-2xl font-bold", color)}>{value}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">de 5</p>
-                      <p className="text-xs font-medium text-foreground mt-1">{label}</p>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Resumo */}
-                <div className="grid grid-cols-3 gap-3 mt-1">
-                  <div className="rounded-xl border border-border bg-card p-3">
-                    <p className="text-xs text-muted-foreground">Total investido</p>
-                    <p className="text-base font-bold text-foreground mt-0.5">{fmtValue(clientDetail.totalValue)}</p>
-                  </div>
-                  <div className="rounded-xl border border-border bg-card p-3">
-                    <p className="text-xs text-muted-foreground">Compras</p>
-                    <p className="text-base font-bold text-foreground mt-0.5">{clientDetail.orderCount}</p>
-                  </div>
-                  <div className="rounded-xl border border-border bg-card p-3">
-                    <p className="text-xs text-muted-foreground">Cliente desde</p>
-                    <p className="text-base font-bold text-foreground mt-0.5">
-                      {new Date(clientDetail.firstPurchaseDate + "T00:00:00").toLocaleDateString("pt-BR", { month: "short", year: "numeric" })}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Histórico de compras */}
-                <div className="mt-2">
-                  <h4 className="text-sm font-semibold text-foreground mb-2">Histórico de Compras</h4>
-                  <div className="rounded-xl border border-border overflow-hidden">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-border bg-muted/30">
-                          <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground">Produto/Serviço</th>
-                          <th className="text-right px-4 py-2.5 text-xs font-semibold text-muted-foreground">Valor</th>
-                          <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground">Pagamento</th>
-                          <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground">Data</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {[...clientDetail.entries]
-                          .sort((a, b) => b.purchase_date.localeCompare(a.purchase_date))
-                          .map((e) => (
-                            <tr key={e.id} className="border-b border-border/50 last:border-0 hover:bg-muted/20">
-                              <td className="px-4 py-2.5 font-medium text-foreground">{e.product_name}</td>
-                              <td className="px-4 py-2.5 text-right font-semibold text-emerald-600">{fmtValue(Number(e.value))}</td>
-                              <td className="px-4 py-2.5 text-muted-foreground text-xs">{PAYMENT_LABELS[e.payment_method] ?? e.payment_method}</td>
-                              <td className="px-4 py-2.5 text-muted-foreground text-xs">
-                                {new Date(e.purchase_date + "T00:00:00").toLocaleDateString("pt-BR")}
-                              </td>
-                            </tr>
-                          ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </>
-            )
-          })()}
-        </DialogContent>
-      </Dialog>
 
       {/* ── MODAL IMPORTAÇÃO ──────────────────────────────────────────────────── */}
       <PortalRfvImport
