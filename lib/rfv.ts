@@ -61,14 +61,28 @@ function monetaryScore(totalValue: number): number {
 }
 
 function deriveSegment(r: number, f: number, m: number): RfvSegment {
-  const score = (r + f + m) / 3
+  // Campeões: notas altas nas três dimensões
   if (r >= 4 && f >= 4 && m >= 4) return "Campeões"
-  if (r >= 3 && f >= 4) return "Fiéis"
-  if (r >= 4 && f <= 2) return "Promissores"
-  if (r >= 4 && f === 1 && m <= 2) return "Novos Clientes"
-  if (score >= 4) return "Iniciantes"
-  if (r <= 2 && f >= 3 && m >= 3) return "Precisam de Atenção"
+
+  // Novos Clientes: compra muito recente (R5), primeiro pedido
+  if (r === 5 && f === 1) return "Novos Clientes"
+
+  // Iniciantes: compra recente (R4), primeiro pedido
+  if (r === 4 && f === 1) return "Iniciantes"
+
+  // Fiéis: recência alta, frequência média-alta (≥3)
+  if (r >= 4 && f >= 3) return "Fiéis"
+
+  // Promissores: recência alta, frequência baixa (≥2 pedidos, mas não campeão/fiel)
+  if (r >= 4 && f >= 2) return "Promissores"
+
+  // Precisam de Atenção: recência média (R3), alguma frequência
+  if (r === 3 && f >= 2) return "Precisam de Atenção"
+
+  // Em Risco: recência baixa, múltiplos pedidos
   if (r <= 2 && f >= 2) return "Em Risco"
+
+  // Hibernando: recência baixa/média com poucos pedidos
   return "Hibernando"
 }
 
