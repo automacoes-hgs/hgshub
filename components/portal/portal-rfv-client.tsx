@@ -4,7 +4,7 @@ import { useState, useTransition, useMemo, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import {
   TrendingUp, Users, DollarSign, Star, AlertTriangle, UserCheck,
-  Plus, Pencil, Trash2, Search, Package, FileBarChart2, ChevronDown,
+  Plus, Pencil, Trash2, Search, Package, FileBarChart2,
   Target, BarChart3, PieChartIcon, ArrowUpRight, Upload,
   ChevronLeft, ChevronRight
 } from "lucide-react"
@@ -12,7 +12,6 @@ import { PortalRfvImport } from "./portal-rfv-import"
 import { createClient } from "@/lib/supabase/client"
 import { useToast } from "@/hooks/use-toast"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -21,11 +20,11 @@ import {
 } from "@/components/ui/dialog"
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
 } from "recharts"
 import {
   computePortalRfv, PORTAL_SEGMENT_COLORS, PORTAL_SEGMENT_ORDER,
-  SEGMENT_CHART_COLORS, fmtValue, PAYMENT_LABELS,
+  SEGMENT_CHART_COLORS, MATRIX_GRID, fmtValue, PAYMENT_LABELS,
   type PortalRfvEntry, type PortalRfvSegment,
 } from "@/lib/rfv-portal"
 import { cn } from "@/lib/utils"
@@ -41,31 +40,6 @@ interface Props {
   entries: PortalRfvEntry[]
   products: Product[]
 }
-
-// ─── Matriz RFV ─────────────────────────────────────────────────────────────
-const MATRIX_CELLS: { label: PortalRfvSegment; bg: string; text: string }[][] = [
-  [
-    { label: "Não Perder" as any, bg: "bg-red-400",     text: "text-white" },
-    { label: "Fiéis",            bg: "bg-emerald-400",  text: "text-white" },
-    { label: "Campeões",         bg: "bg-emerald-500",  text: "text-white" },
-  ],
-  [
-    { label: "Em Risco",         bg: "bg-amber-400",    text: "text-white" },
-    { label: "Precisam de Atenção", bg: "bg-orange-400", text: "text-white" },
-    { label: "Promissores" as any, bg: "bg-violet-400", text: "text-white" },
-  ],
-  [
-    { label: "Hibernando",       bg: "bg-slate-400",    text: "text-white" },
-    { label: "Prestes a Hibernar" as any, bg: "bg-slate-300", text: "text-slate-700" },
-    { label: "Perdidos" as any,  bg: "bg-slate-200",    text: "text-slate-600" },
-    
-  ],
-  [
-    { label: "Hibernando",       bg: "bg-slate-400",    text: "text-white" },
-    { label: "Promissores",      bg: "bg-amber-400",    text: "text-white" },
-    { label: "Novos Clientes",   bg: "bg-violet-400",   text: "text-white" },
-  ],
-]
 
 // ─── Formulário de entrada ───────────────────────────────────────────────────
 type EntryForm = {
@@ -122,7 +96,10 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
   const totalRevenue = useMemo(() => entries.reduce((s, e) => s + Number(e.value), 0), [entries])
   const avgTicket = rfvClients.length ? totalRevenue / rfvClients.length : 0
   const champions = rfvClients.filter((c) => c.segment === "Campeões").length
-  const atRisk = rfvClients.filter((c) => c.segment === "Em Risco" || c.segment === "Hibernando").length
+  const atRisk = rfvClients.filter((c) =>
+    c.segment === "Em Risco" || c.segment === "Hibernando" ||
+    c.segment === "Não Perder" || c.segment === "Prestes a Hibernar" || c.segment === "Perdidos"
+  ).length
 
   // Dados para gráficos
   const segmentCounts = useMemo(() => {
@@ -333,7 +310,7 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
                   { label: "Ticket Médio", value: fmtValue(avgTicket), sub: "por cliente", icon: TrendingUp, bg: "bg-slate-50", color: "text-slate-600" },
                   { label: "Campeões", value: String(champions), sub: "clientes top", icon: Star, bg: "bg-emerald-50", color: "text-emerald-600" },
                   { label: "Em Risco / Hibernando", value: String(atRisk), sub: `${rfvClients.length ? Math.round((atRisk / rfvClients.length) * 100) : 0}% da base`, icon: AlertTriangle, bg: "bg-red-50", color: "text-red-500" },
-                  { label: "Potencial Upsell", value: String(rfvClients.filter((c) => ["Campeões","Fiéis","Promissores"].includes(c.segment)).length), sub: "elegíveis", icon: ArrowUpRight, bg: "bg-violet-50", color: "text-violet-600" },
+                  { label: "Potencial Upsell", value: String(rfvClients.filter((c) => ["Campeões","Clientes Fiéis","Potenciais"].includes(c.segment)).length), sub: "elegíveis", icon: ArrowUpRight, bg: "bg-violet-50", color: "text-violet-600" },
                   { label: "Clientes Ativos", value: `${rfvClients.length ? Math.round((rfvClients.filter((c) => c.recency >= 3).length / rfvClients.length) * 100) : 0}%`, sub: `${rfvClients.filter((c) => c.recency >= 3).length} clientes`, icon: UserCheck, bg: "bg-emerald-50", color: "text-emerald-600" },
                   { label: "Janela de Recompra", value: String(rfvClients.filter((c) => c.recency >= 4 && c.frequency >= 2).length), sub: "prontos para renovar", icon: Target, bg: "bg-amber-50", color: "text-amber-600" },
                 ].map((card) => (
@@ -444,24 +421,17 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
                         </span>
                       </div>
                       <div className="flex-1">
+                        {/* Grid 3×3 principal */}
                         <div className="grid grid-cols-3 gap-1.5">
-                          {[
-                            { label: "Não Perder",          seg: "Em Risco",             bg: "bg-red-400" },
-                            { label: "Clientes Fiéis",      seg: "Fiéis",                bg: "bg-emerald-400" },
-                            { label: "Campeões",            seg: "Campeões",             bg: "bg-emerald-500" },
-                            { label: "Em Risco",            seg: "Em Risco",             bg: "bg-amber-400" },
-                            { label: "Precisam de Atenção", seg: "Precisam de Atenção",  bg: "bg-orange-400" },
-                            { label: "Potenciais",          seg: "Promissores",          bg: "bg-violet-400" },
-                            { label: "Hibernando",          seg: "Hibernando",           bg: "bg-slate-400" },
-                            { label: "Prestes a Hibernar",  seg: "Hibernando",           bg: "bg-slate-300" },
-                            { label: "Perdidos",            seg: "Hibernando",           bg: "bg-slate-200" },
-                            { label: "Promissores",         seg: "Promissores",          bg: "bg-amber-300" },
-                            { label: "Novos",               seg: "Novos Clientes",       bg: "bg-violet-300" },
-                          ].slice(0, 9).map((cell) => {
-                            const count = matrixData[cell.seg as PortalRfvSegment] ?? 0
+                          {MATRIX_GRID.flat().map((cell) => {
+                            const count = matrixData[cell.seg] ?? 0
                             const pct = rfvClients.length ? Math.round((count / rfvClients.length) * 100) : 0
                             return (
-                              <div key={cell.label} className={cn("rounded-lg p-2 text-white", cell.bg)}>
+                              <div
+                                key={cell.label}
+                                className="rounded-lg p-2"
+                                style={{ backgroundColor: cell.matrixBg, color: cell.matrixText }}
+                              >
                                 <p className="text-[10px] font-medium leading-tight">{cell.label}</p>
                                 <p className="text-lg font-bold mt-0.5">{count}</p>
                                 <p className="text-[10px] opacity-80">{pct}%</p>
@@ -469,6 +439,35 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
                             )
                           })}
                         </div>
+                        {/* Linha extra: Promissores + Novos (fora do grid 3×3 do spec) */}
+                        {(() => {
+                          const extras = [
+                            { label: "Promissores", seg: "Promissores" as PortalRfvSegment, matrixBg: "#3498DB", matrixText: "#fff" },
+                            { label: "Novos",       seg: "Novos"       as PortalRfvSegment, matrixBg: "#1ABC9C", matrixText: "#fff" },
+                          ]
+                          const hasExtras = extras.some((e) => (matrixData[e.seg] ?? 0) > 0)
+                          if (!hasExtras) return null
+                          return (
+                            <div className="grid grid-cols-3 gap-1.5 mt-1.5">
+                              <div /> {/* espaço coluna 1 */}
+                              {extras.map((cell) => {
+                                const count = matrixData[cell.seg] ?? 0
+                                const pct = rfvClients.length ? Math.round((count / rfvClients.length) * 100) : 0
+                                return (
+                                  <div
+                                    key={cell.label}
+                                    className="rounded-lg p-2"
+                                    style={{ backgroundColor: cell.matrixBg, color: cell.matrixText }}
+                                  >
+                                    <p className="text-[10px] font-medium leading-tight">{cell.label}</p>
+                                    <p className="text-lg font-bold mt-0.5">{count}</p>
+                                    <p className="text-[10px] opacity-80">{pct}%</p>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )
+                        })()}
                         <p className="text-[10px] text-muted-foreground text-center mt-2">
                           Recência (quão recentemente o cliente comprou)
                         </p>
