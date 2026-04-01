@@ -340,7 +340,7 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
         ))}
       </div>
 
-      {/* ── RELATÓRIO ───────────────────────────────────────────────────��─────── */}
+      {/* ── RELATÓRIO ───────────���───────────────────────────────────────��─────── */}
       {activeTab === "relatorio" && (
         <div className="space-y-6">
           {entries.length === 0 ? (
@@ -362,8 +362,8 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
                   { label: "Campeões", value: String(champions), sub: "clientes top", icon: Star, bg: "bg-emerald-50", color: "text-emerald-600" },
                   { label: "Em Risco / Hibernando", value: String(atRisk), sub: `${rfvClients.length ? Math.round((atRisk / rfvClients.length) * 100) : 0}% da base`, icon: AlertTriangle, bg: "bg-red-50", color: "text-red-500" },
                   { label: "Potencial Upsell", value: String(rfvClients.filter((c) => ["Campeões","Clientes Fiéis","Potenciais"].includes(c.segment)).length), sub: "elegíveis", icon: ArrowUpRight, bg: "bg-violet-50", color: "text-violet-600" },
-                  { label: "Clientes Ativos", value: `${rfvClients.length ? Math.round((rfvClients.filter((c) => c.recency === 3).length / rfvClients.length) * 100) : 0}%`, sub: `${rfvClients.filter((c) => c.recency === 3).length} clientes`, icon: UserCheck, bg: "bg-emerald-50", color: "text-emerald-600" },
-                  { label: "Janela de Recompra", value: String(rfvClients.filter((c) => c.recency === 3 && c.frequency >= 2).length), sub: "prontos para renovar", icon: Target, bg: "bg-amber-50", color: "text-amber-600" },
+                  { label: "Clientes Ativos", value: `${rfvClients.length ? Math.round((rfvClients.filter((c) => c.recency >= 4).length / rfvClients.length) * 100) : 0}%`, sub: `${rfvClients.filter((c) => c.recency >= 4).length} clientes`, icon: UserCheck, bg: "bg-emerald-50", color: "text-emerald-600" },
+                  { label: "Janela de Recompra", value: String(rfvClients.filter((c) => c.recency >= 4 && c.frequency >= 2).length), sub: "prontos para renovar", icon: Target, bg: "bg-amber-50", color: "text-amber-600" },
                 ].map((card) => (
                   <div key={card.label} className="bg-card border border-border rounded-xl p-4 flex items-start justify-between gap-3">
                     <div>
@@ -588,7 +588,7 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
                               <td className="px-4 py-3 text-center text-muted-foreground">{c.frequency}</td>
                               <td className="px-4 py-3 text-center text-muted-foreground">{c.monetary}</td>
                               <td className="px-4 py-3 text-center">
-                                <span className={cn("font-bold", c.score >= 2.5 ? "text-emerald-600" : c.score >= 1.8 ? "text-amber-500" : "text-red-500")}>
+                                <span className={cn("font-bold", c.score >= 4.0 ? "text-emerald-600" : c.score >= 2.5 ? "text-amber-500" : "text-red-500")}>
                                   {c.score.toFixed(1)}
                                 </span>
                               </td>

@@ -1,4 +1,4 @@
-// Lógica RFV — scoring por terços dinâmicos, matriz 3×3 conforme especificação
+// Lógica RFV — scoring por quintis dinâmicos, escala 1–5
 
 export type PortalRfvEntry = {
   id: string
@@ -27,11 +27,11 @@ export type PortalRfvSegment =
 export type PortalClientRfv = {
   customerName: string
   entries: PortalRfvEntry[]
-  recency: number        // R_score 1–3
-  frequency: number      // F_score 1–3
-  monetary: number       // V_score 1–3
-  fv: number             // FV = round((F+V)/2), 1–3
-  score: number          // média (R+F+V)/3 para exibição
+  recency: number        // R_score 1–5
+  frequency: number      // F_score 1–5
+  monetary: number       // V_score 1–5
+  fv: number             // FV = round((F+V)/2), 1–5
+  score: number          // média (R+F+V)/3 para exibição, 1.0–5.0
   segment: PortalRfvSegment
   totalValue: number
   lastPurchaseDate: string
@@ -44,6 +44,7 @@ export type PortalClientRfv = {
 
 /** Calcula o percentil p (0–1) de um array numérico ordenado */
 function percentil(sorted: number[], p: number): number {
+  if (sorted.length === 1) return sorted[0]
   const idx = p * (sorted.length - 1)
   const lo = Math.floor(idx)
   const hi = Math.ceil(idx)
@@ -51,37 +52,55 @@ function percentil(sorted: number[], p: number): number {
 }
 
 /**
- * Dá score de 1–3 por terços dinâmicos.
+ * Dá score de 1–5 por quintis dinâmicos.
  * inverter=true → valores menores recebem score maior (usado para recência).
  */
-function scoreTermos(valor: number, todos: number[], inverter = false): number {
+function scoreQuintis(valor: number, todos: number[], inverter = false): number {
   const sorted = [...todos].sort((a, b) => a - b)
-  const p33 = percentil(sorted, 1 / 3)
-  const p66 = percentil(sorted, 2 / 3)
+  const p20 = percentil(sorted, 0.20)
+  const p40 = percentil(sorted, 0.40)
+  const p60 = percentil(sorted, 0.60)
+  const p80 = percentil(sorted, 0.80)
 
   let score: number
-  if (valor <= p33) score = 1
-  else if (valor <= p66) score = 2
-  else score = 3
+  if (valor <= p20)      score = 1
+  else if (valor <= p40) score = 2
+  else if (valor <= p60) score = 3
+  else if (valor <= p80) score = 4
+  else                   score = 5
 
-  return inverter ? 4 - score : score
+  return inverter ? 6 - score : score
 }
 
 // ── Mapeamento R × FV → Segmento ─────────────────────────────────────────────
-// Conforme documento:
-//              R=1 (Antigo)      R=2 (Médio)        R=3 (Recente)
-// FV=3 (Alto)  Não Perder        Clientes Fiéis      Campeões
-// FV=2 (Médio) Em Risco          Precisam Atenção    Potenciais
-// FV=1 (Baixo) Hibernando        Prestes Hibernar    Perdidos
-
-const SEGMENT_MAP: Record<number, Record<number, PortalRfvSegment>> = {
-  3: { 1: "Não Perder",    2: "Clientes Fiéis",      3: "Campeões"          },
-  2: { 1: "Em Risco",      2: "Precisam de Atenção", 3: "Potenciais"        },
-  1: { 1: "Hibernando",    2: "Prestes a Hibernar",  3: "Perdidos"          },
-}
+//
+// Escala 1–5 colapsada em 3 zonas:
+//   R: baixo (1–2) | médio (3) | alto (4–5)
+//  FV: baixo (1)   | médio (2–3) | alto (4–5)
+//
+//            R baixo       R médio        R alto
+// FV alto    Não Perder    Clientes Fiéis  Campeões
+// FV médio   Em Risco      Precisam Aten.  Potenciais
+// FV baixo   Hibernando    Prestes Hiber.  Perdidos
 
 function classificar(r: number, fv: number): PortalRfvSegment {
-  return SEGMENT_MAP[fv]?.[r] ?? "Precisam de Atenção"
+  const rZone  = r  <= 2 ? "low" : r  <= 3 ? "mid" : "high"
+  const fvZone = fv <= 1 ? "low" : fv <= 3 ? "mid" : "high"
+
+  if (fvZone === "high") {
+    if (rZone === "high") return "Campeões"
+    if (rZone === "mid")  return "Clientes Fiéis"
+    return "Não Perder"
+  }
+  if (fvZone === "mid") {
+    if (rZone === "high") return "Potenciais"
+    if (rZone === "mid")  return "Precisam de Atenção"
+    return "Em Risco"
+  }
+  // fvZone === "low"
+  if (rZone === "high") return "Perdidos"
+  if (rZone === "mid")  return "Prestes a Hibernar"
+  return "Hibernando"
 }
 
 // ── Engine principal ─────────────────────────────────────────────────────────
@@ -105,8 +124,8 @@ export function computePortalRfv(entries: PortalRfvEntry[]): PortalClientRfv[] {
   type Raw = {
     customerName: string
     entries: PortalRfvEntry[]
-    recencyDays: number   // dias desde última compra
-    orderCount: number    // datas únicas de compra
+    recencyDays: number
+    orderCount: number
     totalValue: number
     lastPurchaseDate: string
     firstPurchaseDate: string
@@ -125,18 +144,18 @@ export function computePortalRfv(entries: PortalRfvEntry[]): PortalClientRfv[] {
     return { customerName, entries: customerEntries, recencyDays, orderCount, totalValue, lastPurchaseDate, firstPurchaseDate }
   })
 
-  // Passo 2: arrays globais para terços dinâmicos
-  const allRecencies  = rawList.map((c) => c.recencyDays)
-  const allFreqs      = rawList.map((c) => c.orderCount)
-  const allValues     = rawList.map((c) => c.totalValue)
+  // Passo 2: arrays globais para quintis dinâmicos
+  const allRecencies = rawList.map((c) => c.recencyDays)
+  const allFreqs     = rawList.map((c) => c.orderCount)
+  const allValues    = rawList.map((c) => c.totalValue)
 
-  // Passo 3 + 4: calcular scores e posicionar na matriz
+  // Passo 3: calcular scores e segmentar
   return rawList.map((c) => {
-    const r  = scoreTermos(c.recencyDays, allRecencies, true)   // menor dias → score maior
-    const f  = scoreTermos(c.orderCount,  allFreqs,     false)
-    const v  = scoreTermos(c.totalValue,  allValues,    false)
-    const fv = Math.round((f + v) / 2) as 1 | 2 | 3             // eixo vertical da matriz
-    const score = Math.round(((r + f + v) / 3) * 10) / 10
+    const r  = scoreQuintis(c.recencyDays, allRecencies, true)  // menor dias → score maior
+    const f  = scoreQuintis(c.orderCount,  allFreqs,     false)
+    const v  = scoreQuintis(c.totalValue,  allValues,    false)
+    const fv = Math.round((f + v) / 2)
+    const score = Math.round(((r + f + v) / 3) * 10) / 10      // 1.0–5.0
 
     return {
       customerName: c.customerName,
@@ -185,32 +204,32 @@ export const PORTAL_SEGMENT_ORDER: PortalRfvSegment[] = [
   "Hibernando",
 ]
 
-// ── Grid da Matriz RFV 3×3 ───────────────────────────────────────────────────
-// Linhas: FV=3 (topo) → FV=2 → FV=1 (base)
-// Colunas: R=1 (esq) → R=2 → R=3 (dir)
+// ── Grid da Matriz RFV (visual 3×3, escala 1–5 por baixo) ───────────────────
+// Linhas: FV alto (topo) → FV médio → FV baixo (base)
+// Colunas: R baixo (esq) → R médio → R alto (dir)
 
 export const MATRIX_GRID: {
   label: string
   seg: PortalRfvSegment
   matrixBg: string
   matrixText: string
-  r: number
-  fv: number
+  rZone: string
+  fvZone: string
 }[][] = [
   [
-    { label: "Não Perder",          seg: "Não Perder",          matrixBg: "#E74C3C", matrixText: "#fff", r: 1, fv: 3 },
-    { label: "Clientes Fiéis",      seg: "Clientes Fiéis",      matrixBg: "#2ECC71", matrixText: "#fff", r: 2, fv: 3 },
-    { label: "Campeões",            seg: "Campeões",            matrixBg: "#27AE60", matrixText: "#fff", r: 3, fv: 3 },
+    { label: "Não Perder",          seg: "Não Perder",          matrixBg: "#E74C3C", matrixText: "#fff", rZone: "low",  fvZone: "high" },
+    { label: "Clientes Fiéis",      seg: "Clientes Fiéis",      matrixBg: "#2ECC71", matrixText: "#fff", rZone: "mid",  fvZone: "high" },
+    { label: "Campeões",            seg: "Campeões",            matrixBg: "#27AE60", matrixText: "#fff", rZone: "high", fvZone: "high" },
   ],
   [
-    { label: "Em Risco",            seg: "Em Risco",            matrixBg: "#F39C12", matrixText: "#fff", r: 1, fv: 2 },
-    { label: "Precisam de Atenção", seg: "Precisam de Atenção", matrixBg: "#E67E22", matrixText: "#fff", r: 2, fv: 2 },
-    { label: "Potenciais",          seg: "Potenciais",          matrixBg: "#5DADE2", matrixText: "#fff", r: 3, fv: 2 },
+    { label: "Em Risco",            seg: "Em Risco",            matrixBg: "#F39C12", matrixText: "#fff", rZone: "low",  fvZone: "mid"  },
+    { label: "Precisam de Atenção", seg: "Precisam de Atenção", matrixBg: "#E67E22", matrixText: "#fff", rZone: "mid",  fvZone: "mid"  },
+    { label: "Potenciais",          seg: "Potenciais",          matrixBg: "#5DADE2", matrixText: "#fff", rZone: "high", fvZone: "mid"  },
   ],
   [
-    { label: "Hibernando",          seg: "Hibernando",          matrixBg: "#95A5A6", matrixText: "#fff", r: 1, fv: 1 },
-    { label: "Prestes a Hibernar",  seg: "Prestes a Hibernar",  matrixBg: "#7F8C8D", matrixText: "#fff", r: 2, fv: 1 },
-    { label: "Perdidos",            seg: "Perdidos",            matrixBg: "#BDC3C7", matrixText: "#555", r: 3, fv: 1 },
+    { label: "Hibernando",          seg: "Hibernando",          matrixBg: "#95A5A6", matrixText: "#fff", rZone: "low",  fvZone: "low"  },
+    { label: "Prestes a Hibernar",  seg: "Prestes a Hibernar",  matrixBg: "#7F8C8D", matrixText: "#fff", rZone: "mid",  fvZone: "low"  },
+    { label: "Perdidos",            seg: "Perdidos",            matrixBg: "#BDC3C7", matrixText: "#555", rZone: "high", fvZone: "low"  },
   ],
 ]
 
