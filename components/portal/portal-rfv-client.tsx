@@ -24,7 +24,7 @@ import {
 } from "recharts"
 import {
   computePortalRfv, PORTAL_SEGMENT_COLORS, PORTAL_SEGMENT_ORDER,
-  SEGMENT_CHART_COLORS, fmtValue, PAYMENT_LABELS,
+  SEGMENT_CHART_COLORS, MATRIX_GRID, fmtValue, PAYMENT_LABELS,
   type PortalRfvEntry, type PortalRfvSegment,
 } from "@/lib/rfv-portal"
 import { cn } from "@/lib/utils"
@@ -311,8 +311,8 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
                   { label: "Campeões", value: String(champions), sub: "clientes top", icon: Star, bg: "bg-emerald-50", color: "text-emerald-600" },
                   { label: "Em Risco / Hibernando", value: String(atRisk), sub: `${rfvClients.length ? Math.round((atRisk / rfvClients.length) * 100) : 0}% da base`, icon: AlertTriangle, bg: "bg-red-50", color: "text-red-500" },
                   { label: "Potencial Upsell", value: String(rfvClients.filter((c) => ["Campeões","Clientes Fiéis","Potenciais"].includes(c.segment)).length), sub: "elegíveis", icon: ArrowUpRight, bg: "bg-violet-50", color: "text-violet-600" },
-                  { label: "Clientes Ativos", value: `${rfvClients.length ? Math.round((rfvClients.filter((c) => c.recency >= 3).length / rfvClients.length) * 100) : 0}%`, sub: `${rfvClients.filter((c) => c.recency >= 3).length} clientes`, icon: UserCheck, bg: "bg-emerald-50", color: "text-emerald-600" },
-                  { label: "Janela de Recompra", value: String(rfvClients.filter((c) => c.recency >= 4 && c.frequency >= 2).length), sub: "prontos para renovar", icon: Target, bg: "bg-amber-50", color: "text-amber-600" },
+                  { label: "Clientes Ativos", value: `${rfvClients.length ? Math.round((rfvClients.filter((c) => c.recency === 3).length / rfvClients.length) * 100) : 0}%`, sub: `${rfvClients.filter((c) => c.recency === 3).length} clientes`, icon: UserCheck, bg: "bg-emerald-50", color: "text-emerald-600" },
+                  { label: "Janela de Recompra", value: String(rfvClients.filter((c) => c.recency === 3 && c.frequency >= 2).length), sub: "prontos para renovar", icon: Target, bg: "bg-amber-50", color: "text-amber-600" },
                 ].map((card) => (
                   <div key={card.label} className="bg-card border border-border rounded-xl p-4 flex items-start justify-between gap-3">
                     <div>
@@ -413,79 +413,53 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="flex gap-2">
+                    <div className="flex gap-3">
                       {/* Eixo Y */}
-                      <div className="flex flex-col justify-center">
-                        <span className="text-[10px] text-muted-foreground [writing-mode:vertical-lr] rotate-180 text-center">
+                      <div className="flex items-center justify-center">
+                        <span className="text-[10px] text-muted-foreground [writing-mode:vertical-lr] rotate-180 text-center leading-none">
                           Frequência e valor (regularidade e gasto)
                         </span>
                       </div>
+
+                      {/* Grid 3×3 */}
                       <div className="flex-1 flex flex-col gap-1.5">
-
-                        {/* Linha 1: Não Perder | Clientes Fiéis | Campeões */}
-                        <div className="grid grid-cols-3 gap-1.5">
-                          {(
-                            [
-                              { label: "Não Perder",    seg: "Não Perder"    as PortalRfvSegment, bg: "#E74C3C" },
-                              { label: "Clientes Fiéis",seg: "Clientes Fiéis"as PortalRfvSegment, bg: "#2ECC71" },
-                              { label: "Campeões",      seg: "Campeões"      as PortalRfvSegment, bg: "#27AE60" },
-                            ] as const
-                          ).map((cell) => {
-                            const count = matrixData[cell.seg] ?? 0
-                            const pct = rfvClients.length ? Math.round((count / rfvClients.length) * 100) : 0
-                            return (
-                              <div key={cell.label} className="rounded-lg p-3 text-white" style={{ backgroundColor: cell.bg }}>
-                                <p className="text-[11px] font-semibold leading-tight">{cell.label}</p>
-                                <p className="text-2xl font-bold mt-1">{count}</p>
-                                <p className="text-[10px] opacity-80">{pct}%</p>
-                              </div>
-                            )
-                          })}
-                        </div>
-
-                        {/* Linha 2: Em Risco | Precisam de Atenção | Potenciais */}
-                        <div className="grid grid-cols-3 gap-1.5">
-                          {(
-                            [
-                              { label: "Em Risco",             seg: "Em Risco"            as PortalRfvSegment, bg: "#F39C12" },
-                              { label: "Precisam de Atenção",  seg: "Precisam de Atenção" as PortalRfvSegment, bg: "#E67E22" },
-                              { label: "Potenciais",           seg: "Potenciais"          as PortalRfvSegment, bg: "#5DADE2" },
-                            ] as const
-                          ).map((cell) => {
-                            const count = matrixData[cell.seg] ?? 0
-                            const pct = rfvClients.length ? Math.round((count / rfvClients.length) * 100) : 0
-                            return (
-                              <div key={cell.label} className="rounded-lg p-3 text-white" style={{ backgroundColor: cell.bg }}>
-                                <p className="text-[11px] font-semibold leading-tight">{cell.label}</p>
-                                <p className="text-2xl font-bold mt-1">{count}</p>
-                                <p className="text-[10px] opacity-80">{pct}%</p>
-                              </div>
-                            )
-                          })}
-                        </div>
-
-                        {/* Linha 3: Hibernando | Prestes a Hibernar | Perdidos | Promissores | Novos */}
-                        <div className="grid grid-cols-5 gap-1.5">
-                          {(
-                            [
-                              { label: "Hibernando",         seg: "Hibernando"         as PortalRfvSegment, bg: "#95A5A6" },
-                              { label: "Prestes a Hibernar", seg: "Prestes a Hibernar" as PortalRfvSegment, bg: "#7F8C8D" },
-                              { label: "Perdidos",           seg: "Perdidos"           as PortalRfvSegment, bg: "#BDC3C7" },
-                              { label: "Promissores",        seg: "Promissores"        as PortalRfvSegment, bg: "#3498DB" },
-                              { label: "Novos",              seg: "Novos"              as PortalRfvSegment, bg: "#1ABC9C" },
-                            ] as const
-                          ).map((cell) => {
-                            const count = matrixData[cell.seg] ?? 0
-                            const pct = rfvClients.length ? Math.round((count / rfvClients.length) * 100) : 0
-                            return (
-                              <div key={cell.label} className="rounded-lg p-2 text-white" style={{ backgroundColor: cell.bg }}>
-                                <p className="text-[10px] font-semibold leading-tight">{cell.label}</p>
-                                <p className="text-xl font-bold mt-1">{count}</p>
-                                <p className="text-[10px] opacity-80">{pct}%</p>
-                              </div>
-                            )
-                          })}
-                        </div>
+                        {MATRIX_GRID.map((row, rowIdx) => (
+                          <div key={rowIdx} className="grid grid-cols-3 gap-1.5">
+                            {row.map((cell) => {
+                              const count = matrixData[cell.seg] ?? 0
+                              const pct = rfvClients.length
+                                ? Math.round((count / rfvClients.length) * 100)
+                                : 0
+                              const textColor = cell.matrixText === "#555" ? "#555" : "#fff"
+                              return (
+                                <div
+                                  key={cell.seg}
+                                  className="rounded-xl p-3 flex flex-col gap-0.5"
+                                  style={{ backgroundColor: cell.matrixBg }}
+                                >
+                                  <p
+                                    className="text-[11px] font-semibold leading-tight"
+                                    style={{ color: textColor, opacity: 0.9 }}
+                                  >
+                                    {cell.label}
+                                  </p>
+                                  <p
+                                    className="text-2xl font-bold leading-none mt-1"
+                                    style={{ color: textColor }}
+                                  >
+                                    {count}
+                                  </p>
+                                  <p
+                                    className="text-[10px] font-medium"
+                                    style={{ color: textColor, opacity: 0.7 }}
+                                  >
+                                    {pct}%
+                                  </p>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        ))}
 
                         <p className="text-[10px] text-muted-foreground text-center mt-1">
                           Recência (quão recentemente o cliente comprou)
@@ -537,7 +511,7 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
                               <td className="px-4 py-3 text-center text-muted-foreground">{c.frequency}</td>
                               <td className="px-4 py-3 text-center text-muted-foreground">{c.monetary}</td>
                               <td className="px-4 py-3 text-center">
-                                <span className={cn("font-bold", c.score >= 4 ? "text-emerald-600" : c.score >= 3 ? "text-amber-500" : "text-red-500")}>
+                                <span className={cn("font-bold", c.score >= 2.5 ? "text-emerald-600" : c.score >= 1.8 ? "text-amber-500" : "text-red-500")}>
                                   {c.score.toFixed(1)}
                                 </span>
                               </td>
