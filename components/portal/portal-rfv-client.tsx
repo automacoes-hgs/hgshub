@@ -133,7 +133,10 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
   // Importação
   const [importModal, setImportModal] = useState(false)
   function handleImported(newEntries: typeof entries, newProducts: typeof products) {
-    setEntries((prev) => [...newEntries, ...prev])
+    setEntries((prev) => {
+      const existingIds = new Set(prev.map((e) => e.id))
+      return [...newEntries.filter((e) => !existingIds.has(e.id)), ...prev]
+    })
     setProducts((prev) => {
       const existingIds = new Set(prev.map((p) => p.id))
       return [...prev, ...newProducts.filter((p) => !existingIds.has(p.id))]
@@ -363,7 +366,7 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
                   { label: "Em Risco / Hibernando", value: String(atRisk), sub: `${rfvClients.length ? Math.round((atRisk / rfvClients.length) * 100) : 0}% da base`, icon: AlertTriangle, bg: "bg-red-50", color: "text-red-500" },
                   { label: "Potencial Upsell", value: String(rfvClients.filter((c) => ["Campeões","Clientes Fiéis","Potenciais"].includes(c.segment)).length), sub: "elegíveis", icon: ArrowUpRight, bg: "bg-violet-50", color: "text-violet-600" },
                   { label: "Clientes Ativos", value: `${rfvClients.length ? Math.round((rfvClients.filter((c) => c.recency >= 4).length / rfvClients.length) * 100) : 0}%`, sub: `${rfvClients.filter((c) => c.recency >= 4).length} clientes`, icon: UserCheck, bg: "bg-emerald-50", color: "text-emerald-600" },
-                  { label: "Janela de Recompra", value: String(rfvClients.filter((c) => c.recency >= 4 && c.frequency >= 2).length), sub: "prontos para renovar", icon: Target, bg: "bg-amber-50", color: "text-amber-600" },
+                  { label: "Janela de Recompra", value: String(rfvClients.filter((c) => c.recencyDays >= 60 && c.recencyDays <= 90).length), sub: "compraram há 60–90 dias", icon: Target, bg: "bg-amber-50", color: "text-amber-600" },
                 ].map((card) => (
                   <div key={card.label} className="bg-card border border-border rounded-xl p-4 flex items-start justify-between gap-3">
                     <div>
