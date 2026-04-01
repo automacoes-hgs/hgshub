@@ -106,18 +106,23 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
     if (!confirm(`Remover ${selectedIds.size} entrada(s) selecionada(s)?`)) return
     setBulkDeleting(true)
     const ids = [...selectedIds]
-    console.log("[v0] bulk delete ids:", ids, "ownerId:", ownerId)
-    const { error, count } = await supabase
-      .from("client_rfv_entries")
-      .delete({ count: "exact" })
-      .in("id", ids)
-      .eq("owner_id", ownerId)
-    console.log("[v0] bulk delete result:", { error, count })
-    if (error) {
-      toast({ title: "Erro ao remover", description: error.message, variant: "destructive" })
-      setBulkDeleting(false)
-      return
+
+    // Supabase rejeita .in() com muitos IDs via URL — fazemos em lotes de 50
+    const BATCH = 50
+    for (let i = 0; i < ids.length; i += BATCH) {
+      const chunk = ids.slice(i, i + BATCH)
+      const { error } = await supabase
+        .from("client_rfv_entries")
+        .delete()
+        .in("id", chunk)
+        .eq("owner_id", ownerId)
+      if (error) {
+        toast({ title: "Erro ao remover", description: error.message, variant: "destructive" })
+        setBulkDeleting(false)
+        return
+      }
     }
+
     setEntries((prev) => prev.filter((e) => !selectedIds.has(e.id)))
     setSelectedIds(new Set())
     setBulkDeleting(false)
@@ -335,7 +340,7 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
         ))}
       </div>
 
-      {/* ── RELATÓRIO ─────────────────────────────────────────────────────────── */}
+      {/* ── RELATÓRIO ───────────────────────────────────────────────────��─────── */}
       {activeTab === "relatorio" && (
         <div className="space-y-6">
           {entries.length === 0 ? (

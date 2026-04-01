@@ -60,29 +60,42 @@ function monetaryScore(totalValue: number): number {
   return 1
 }
 
+/**
+ * Matriz RFV 5×5 → 8 segmentos
+ * Baseada nas combinações observadas nos dados reais:
+ *
+ *  Campeões          R4-5, F4-5, M4-5  — compra recente, alta freq e valor
+ *  Fiéis             R4-5, F3+         — recentes e frequentes (qualquer M)
+ *  Promissores       R4-5, F2          — recentes, pouco freq, qualquer M
+ *  Novos Clientes    R5,   F1          — 1ª compra muito recente
+ *  Iniciantes        R4,   F1          — 1ª compra recente
+ *  Precisam Atenção  R3,   F2+         — recência média com engajamento
+ *  Em Risco          R1-2, F2+         — sumiram mas foram ativos
+ *  Hibernando        F1 + R1-3         — 1 pedido só, ou R baixo com F1
+ */
 function deriveSegment(r: number, f: number, m: number): RfvSegment {
-  // Campeões: notas altas nas três dimensões
+  // Campeões: recentes, frequentes e alto valor
   if (r >= 4 && f >= 4 && m >= 4) return "Campeões"
 
-  // Novos Clientes: compra muito recente (R5), primeiro pedido
+  // Novos Clientes: 1ª compra muito recente (R5)
   if (r === 5 && f === 1) return "Novos Clientes"
 
-  // Iniciantes: compra recente (R4), primeiro pedido
+  // Iniciantes: 1ª compra recente (R4)
   if (r === 4 && f === 1) return "Iniciantes"
 
-  // Fiéis: recência alta, frequência média-alta (≥3)
+  // Fiéis: recência alta + frequência média-alta (F3+)
   if (r >= 4 && f >= 3) return "Fiéis"
 
-  // Promissores: recência alta, frequência baixa (≥2 pedidos, mas não campeão/fiel)
+  // Promissores: recência alta + 2ª compra (não é campeão/fiel/novo)
   if (r >= 4 && f >= 2) return "Promissores"
 
-  // Precisam de Atenção: recência média (R3), alguma frequência
-  if (r === 3 && f >= 2) return "Precisam de Atenção"
+  // Precisam de Atenção: recência média + algum engajamento
+  if (r === 3) return "Precisam de Atenção"
 
-  // Em Risco: recência baixa, múltiplos pedidos
+  // Em Risco: sumiram mas tiveram histórico
   if (r <= 2 && f >= 2) return "Em Risco"
 
-  // Hibernando: recência baixa/média com poucos pedidos
+  // Hibernando: baixa recência + primeiro e único pedido
   return "Hibernando"
 }
 
