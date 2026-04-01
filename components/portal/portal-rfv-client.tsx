@@ -107,27 +107,27 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
     setBulkDeleting(true)
     const ids = [...selectedIds]
 
-    // Supabase rejeita .in() com muitos IDs via URL — fazemos em lotes de 50
-    const BATCH = 50
-    for (let i = 0; i < ids.length; i += BATCH) {
-      const chunk = ids.slice(i, i + BATCH)
-      const { error } = await supabase
-        .from("client_rfv_entries")
-        .delete()
-        .in("id", chunk)
-        .eq("owner_id", ownerId)
-      if (error) {
-        toast({ title: "Erro ao remover", description: error.message, variant: "destructive" })
+    try {
+      const res = await fetch("/api/rfv-entries/bulk-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        toast({ title: "Erro ao remover", description: json.error ?? res.statusText, variant: "destructive" })
         setBulkDeleting(false)
         return
       }
+      setEntries((prev) => prev.filter((e) => !selectedIds.has(e.id)))
+      setSelectedIds(new Set())
+      toast({ title: `${ids.length} entrada(s) removida(s)` })
+      startTransition(() => router.refresh())
+    } catch (err) {
+      toast({ title: "Erro ao remover", description: String(err), variant: "destructive" })
+    } finally {
+      setBulkDeleting(false)
     }
-
-    setEntries((prev) => prev.filter((e) => !selectedIds.has(e.id)))
-    setSelectedIds(new Set())
-    setBulkDeleting(false)
-    toast({ title: `${ids.length} entrada(s) removida(s)` })
-    startTransition(() => router.refresh())
   }
 
   // Importação
