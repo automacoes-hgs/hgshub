@@ -16,13 +16,14 @@ export type PortalRfvEntry = {
 export type PortalRfvSegment =
   | "Campeões"
   | "Clientes Fiéis"
-  | "Não Perder"
-  | "Potenciais"
-  | "Precisam de Atenção"
+  | "Quase Campeões"
+  | "Potencial de Lealdade"
+  | "Novos Clientes"
+  | "Em Risco (Alto Valor)"
   | "Em Risco"
+  | "Perdidos Fiéis"
   | "Perdidos"
-  | "Prestes a Hibernar"
-  | "Hibernando"
+  | "Precisam de Atenção"
 
 export type PortalClientRfv = {
   customerName: string
@@ -73,35 +74,39 @@ function scoreQuintisArray(values: number[], inverter = false): number[] {
   })
 }
 
-// ── Mapeamento R × FV → Segmento ─────────────────────────────────────────────
-//
-// Escala 1–5 colapsada em 3 zonas:
-//   R: baixo (1–2) | médio (3) | alto (4–5)
-//  FV: baixo (1)   | médio (2–3) | alto (4–5)
-//
-//            R baixo       R médio        R alto
-// FV alto    Não Perder    Clientes Fiéis  Campeões
-// FV médio   Em Risco      Precisam Aten.  Potenciais
-// FV baixo   Hibernando    Prestes Hiber.  Perdidos
+// ── Regras de segmentação — avaliadas em ordem de prioridade ─────────────────
+// Baseadas em R, F, V individuais (1–5) e score total (3–15)
 
-function classificar(r: number, fv: number): PortalRfvSegment {
-  const rZone  = r  <= 2 ? "low" : r  <= 3 ? "mid" : "high"
-  const fvZone = fv <= 1 ? "low" : fv <= 3 ? "mid" : "high"
+function classificar(r: number, f: number, v: number, score: number): PortalRfvSegment {
+  // 1. Campeões — top 20% nas três dimensões simultaneamente
+  if (r === 5 && f === 5 && v === 5)          return "Campeões"
 
-  if (fvZone === "high") {
-    if (rZone === "high") return "Campeões"
-    if (rZone === "mid")  return "Clientes Fiéis"
-    return "Não Perder"
-  }
-  if (fvZone === "mid") {
-    if (rZone === "high") return "Potenciais"
-    if (rZone === "mid")  return "Precisam de Atenção"
-    return "Em Risco"
-  }
-  // fvZone === "low"
-  if (rZone === "high") return "Perdidos"
-  if (rZone === "mid")  return "Prestes a Hibernar"
-  return "Hibernando"
+  // 2. Clientes Fiéis — top 40% nas três
+  if (r >= 4 && f >= 4 && v >= 4)             return "Clientes Fiéis"
+
+  // 3. Quase Campeões — recentes + pontuação total alta
+  if (r >= 4 && score >= 12)                  return "Quase Campeões"
+
+  // 4. Potencial de Lealdade — engajados, ainda não consistentes
+  if (r >= 3 && f >= 3 && score >= 9)         return "Potencial de Lealdade"
+
+  // 5. Novos Clientes — recentes mas pouca frequência
+  if (r >= 4 && f <= 2)                       return "Novos Clientes"
+
+  // 6. Em Risco (Alto Valor) — eram ótimos, sumiram
+  if (r <= 2 && f >= 4 && v >= 4)             return "Em Risco (Alto Valor)"
+
+  // 7. Em Risco — médios/bons clientes sumindo
+  if (r <= 2 && f >= 3)                       return "Em Risco"
+
+  // 8. Perdidos Fiéis — eram frequentes, faz muito tempo
+  if (r === 1 && f >= 4)                      return "Perdidos Fiéis"
+
+  // 9. Perdidos — nunca muito engajados e sumiram
+  if (r === 1 && score <= 5)                  return "Perdidos"
+
+  // 10. Precisam de Atenção — todos os demais
+  return "Precisam de Atenção"
 }
 
 // ── Engine principal ─────────────────────────────────────────────────────────
@@ -186,7 +191,7 @@ export function computePortalRfv(entries: PortalRfvEntry[]): PortalClientRfv[] {
       monetary:         v,
       fv,
       score,
-      segment:          classificar(r, fv),
+      segment:          classificar(r, f, v, score),
       totalValue:       c.totalValue,
       lastPurchaseDate: c.lastPurchaseDate,
       firstPurchaseDate: c.firstPurchaseDate,
@@ -202,70 +207,69 @@ export const PORTAL_SEGMENT_COLORS: Record<
   PortalRfvSegment,
   { bg: string; text: string; border: string; dot: string; card: string; hex: string }
 > = {
-  "Campeões":            { bg: "bg-emerald-50",  text: "text-emerald-700", border: "border-emerald-200", dot: "bg-emerald-500", card: "bg-emerald-500",  hex: "#27AE60" },
-  "Clientes Fiéis":      { bg: "bg-green-50",    text: "text-green-700",   border: "border-green-200",   dot: "bg-green-500",   card: "bg-green-500",    hex: "#2ECC71" },
-  "Não Perder":          { bg: "bg-red-50",      text: "text-red-700",     border: "border-red-200",     dot: "bg-red-500",     card: "bg-red-500",      hex: "#E74C3C" },
-  "Em Risco":            { bg: "bg-orange-50",   text: "text-orange-700",  border: "border-orange-200",  dot: "bg-orange-500",  card: "bg-orange-500",   hex: "#F39C12" },
-  "Precisam de Atenção": { bg: "bg-amber-50",    text: "text-amber-700",   border: "border-amber-200",   dot: "bg-amber-500",   card: "bg-amber-500",    hex: "#E67E22" },
-  "Potenciais":          { bg: "bg-sky-50",      text: "text-sky-700",     border: "border-sky-200",     dot: "bg-sky-500",     card: "bg-sky-500",      hex: "#5DADE2" },
-  "Perdidos":            { bg: "bg-zinc-100",    text: "text-zinc-500",    border: "border-zinc-200",    dot: "bg-zinc-400",    card: "bg-zinc-300",     hex: "#BDC3C7" },
-  "Prestes a Hibernar":  { bg: "bg-slate-100",   text: "text-slate-600",   border: "border-slate-200",   dot: "bg-slate-400",   card: "bg-slate-400",    hex: "#7F8C8D" },
-  "Hibernando":          { bg: "bg-slate-100",   text: "text-slate-500",   border: "border-slate-200",   dot: "bg-slate-500",   card: "bg-slate-500",    hex: "#95A5A6" },
+  "Campeões":              { bg: "bg-emerald-50",  text: "text-emerald-700", border: "border-emerald-200", dot: "bg-emerald-500", card: "bg-emerald-500", hex: "#27AE60" },
+  "Clientes Fiéis":        { bg: "bg-green-50",    text: "text-green-700",   border: "border-green-200",   dot: "bg-green-500",   card: "bg-green-500",   hex: "#2ECC71" },
+  "Quase Campeões":        { bg: "bg-teal-50",     text: "text-teal-700",    border: "border-teal-200",    dot: "bg-teal-500",    card: "bg-teal-500",    hex: "#1ABC9C" },
+  "Potencial de Lealdade": { bg: "bg-sky-50",      text: "text-sky-700",     border: "border-sky-200",     dot: "bg-sky-500",     card: "bg-sky-500",     hex: "#5DADE2" },
+  "Novos Clientes":        { bg: "bg-blue-50",     text: "text-blue-700",    border: "border-blue-200",    dot: "bg-blue-500",    card: "bg-blue-500",    hex: "#3498DB" },
+  "Em Risco (Alto Valor)": { bg: "bg-red-50",      text: "text-red-700",     border: "border-red-200",     dot: "bg-red-500",     card: "bg-red-500",     hex: "#E74C3C" },
+  "Em Risco":              { bg: "bg-orange-50",   text: "text-orange-700",  border: "border-orange-200",  dot: "bg-orange-500",  card: "bg-orange-500",  hex: "#F39C12" },
+  "Perdidos Fiéis":        { bg: "bg-amber-50",    text: "text-amber-700",   border: "border-amber-200",   dot: "bg-amber-500",   card: "bg-amber-500",   hex: "#E67E22" },
+  "Perdidos":              { bg: "bg-zinc-100",    text: "text-zinc-500",    border: "border-zinc-200",    dot: "bg-zinc-400",    card: "bg-zinc-300",    hex: "#BDC3C7" },
+  "Precisam de Atenção":   { bg: "bg-slate-100",   text: "text-slate-600",   border: "border-slate-200",   dot: "bg-slate-400",   card: "bg-slate-400",   hex: "#7F8C8D" },
 }
 
 export const PORTAL_SEGMENT_ORDER: PortalRfvSegment[] = [
   "Campeões",
   "Clientes Fiéis",
-  "Não Perder",
-  "Potenciais",
-  "Precisam de Atenção",
+  "Quase Campeões",
+  "Potencial de Lealdade",
+  "Novos Clientes",
+  "Em Risco (Alto Valor)",
   "Em Risco",
+  "Perdidos Fiéis",
   "Perdidos",
-  "Prestes a Hibernar",
-  "Hibernando",
+  "Precisam de Atenção",
 ]
 
-// ── Grid da Matriz RFV (visual 3×3, escala 1–5 por baixo) ───────────────────
-// Linhas: FV alto (topo) → FV médio → FV baixo (base)
-// Colunas: R baixo (esq) → R médio → R alto (dir)
+// ── Grid da Matriz RFV (visual — segmentos por prioridade) ───────────────────
+// 2 linhas × 5 colunas para acomodar os 10 segmentos
 
 export const MATRIX_GRID: {
   label: string
   seg: PortalRfvSegment
   matrixBg: string
   matrixText: string
-  rZone: string
-  fvZone: string
 }[][] = [
   [
-    { label: "Não Perder",          seg: "Não Perder",          matrixBg: "#E74C3C", matrixText: "#fff", rZone: "low",  fvZone: "high" },
-    { label: "Clientes Fiéis",      seg: "Clientes Fiéis",      matrixBg: "#2ECC71", matrixText: "#fff", rZone: "mid",  fvZone: "high" },
-    { label: "Campeões",            seg: "Campeões",            matrixBg: "#27AE60", matrixText: "#fff", rZone: "high", fvZone: "high" },
+    { label: "Campeões",              seg: "Campeões",              matrixBg: "#27AE60", matrixText: "#fff" },
+    { label: "Clientes Fiéis",        seg: "Clientes Fiéis",        matrixBg: "#2ECC71", matrixText: "#fff" },
+    { label: "Quase Campeões",        seg: "Quase Campeões",        matrixBg: "#1ABC9C", matrixText: "#fff" },
+    { label: "Potencial de Lealdade", seg: "Potencial de Lealdade", matrixBg: "#5DADE2", matrixText: "#fff" },
+    { label: "Novos Clientes",        seg: "Novos Clientes",        matrixBg: "#3498DB", matrixText: "#fff" },
   ],
   [
-    { label: "Em Risco",            seg: "Em Risco",            matrixBg: "#F39C12", matrixText: "#fff", rZone: "low",  fvZone: "mid"  },
-    { label: "Precisam de Atenção", seg: "Precisam de Atenção", matrixBg: "#E67E22", matrixText: "#fff", rZone: "mid",  fvZone: "mid"  },
-    { label: "Potenciais",          seg: "Potenciais",          matrixBg: "#5DADE2", matrixText: "#fff", rZone: "high", fvZone: "mid"  },
-  ],
-  [
-    { label: "Hibernando",          seg: "Hibernando",          matrixBg: "#95A5A6", matrixText: "#fff", rZone: "low",  fvZone: "low"  },
-    { label: "Prestes a Hibernar",  seg: "Prestes a Hibernar",  matrixBg: "#7F8C8D", matrixText: "#fff", rZone: "mid",  fvZone: "low"  },
-    { label: "Perdidos",            seg: "Perdidos",            matrixBg: "#BDC3C7", matrixText: "#555", rZone: "high", fvZone: "low"  },
+    { label: "Em Risco (Alto Valor)", seg: "Em Risco (Alto Valor)", matrixBg: "#E74C3C", matrixText: "#fff" },
+    { label: "Em Risco",              seg: "Em Risco",              matrixBg: "#F39C12", matrixText: "#fff" },
+    { label: "Perdidos Fiéis",        seg: "Perdidos Fiéis",        matrixBg: "#E67E22", matrixText: "#fff" },
+    { label: "Perdidos",              seg: "Perdidos",              matrixBg: "#BDC3C7", matrixText: "#555" },
+    { label: "Precisam de Atenção",   seg: "Precisam de Atenção",   matrixBg: "#7F8C8D", matrixText: "#fff" },
   ],
 ]
 
 // ── Cores para gráfico donut ─────────────────────────────────────────────────
 
 export const SEGMENT_CHART_COLORS: Record<PortalRfvSegment, string> = {
-  "Campeões":            "#27AE60",
-  "Clientes Fiéis":      "#2ECC71",
-  "Não Perder":          "#E74C3C",
-  "Em Risco":            "#F39C12",
-  "Precisam de Atenção": "#E67E22",
-  "Potenciais":          "#5DADE2",
-  "Perdidos":            "#BDC3C7",
-  "Prestes a Hibernar":  "#7F8C8D",
-  "Hibernando":          "#95A5A6",
+  "Campeões":              "#27AE60",
+  "Clientes Fiéis":        "#2ECC71",
+  "Quase Campeões":        "#1ABC9C",
+  "Potencial de Lealdade": "#5DADE2",
+  "Novos Clientes":        "#3498DB",
+  "Em Risco (Alto Valor)": "#E74C3C",
+  "Em Risco":              "#F39C12",
+  "Perdidos Fiéis":        "#E67E22",
+  "Perdidos":              "#BDC3C7",
+  "Precisam de Atenção":   "#7F8C8D",
 }
 
 // ── Utilitários ──────────────────────────────────────────────────────────────
