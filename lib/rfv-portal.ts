@@ -40,36 +40,37 @@ export type PortalClientRfv = {
   orderCount: number
 }
 
-// ── Helpers de percentil ─────────────────────────────────────────────────────
-
-/** Calcula o percentil p (0–1) de um array numérico ordenado */
-function percentil(sorted: number[], p: number): number {
-  if (sorted.length === 1) return sorted[0]
-  const idx = p * (sorted.length - 1)
-  const lo = Math.floor(idx)
-  const hi = Math.ceil(idx)
-  return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo)
-}
+// ── Helpers de quintis ───────────────────────────────────────────────────────
 
 /**
- * Dá score de 1–5 por quintis dinâmicos.
- * inverter=true → valores menores recebem score maior (usado para recência).
+ * Atribui score de quintil (1–5) para cada elemento usando rank(method='first'):
+ * desempate por ordem de aparição antes de dividir em quintis. Isso garante
+ * grupos de tamanho igual mesmo com muitos empates.
+ *
+ * inverter=true → quintil 1 (menores) recebe score 5 (usado para recência:
+ * menor recencyDays = comprou mais recentemente = score melhor).
  */
-function scoreQuintis(valor: number, todos: number[], inverter = false): number {
-  const sorted = [...todos].sort((a, b) => a - b)
-  const p20 = percentil(sorted, 0.20)
-  const p40 = percentil(sorted, 0.40)
-  const p60 = percentil(sorted, 0.60)
-  const p80 = percentil(sorted, 0.80)
+function scoreQuintisArray(values: number[], inverter = false): number[] {
+  const n = values.length
+  if (n === 0) return []
+  if (n === 1) return [3] // único cliente: score médio
 
-  let score: number
-  if (valor <= p20)      score = 1
-  else if (valor <= p40) score = 2
-  else if (valor <= p60) score = 3
-  else if (valor <= p80) score = 4
-  else                   score = 5
+  // Cria array de índices e ordena pelo valor; empates mantêm ordem de aparição (stable sort)
+  const indexed = values.map((v, i) => ({ v, i }))
+  indexed.sort((a, b) => a.v - b.v || a.i - b.i) // stable: menor valor primeiro, empate por posição original
 
-  return inverter ? 6 - score : score
+  // Atribui rank 0..n-1 de acordo com a posição no array ordenado
+  const rank = new Array<number>(n)
+  for (let pos = 0; pos < n; pos++) {
+    rank[indexed[pos].i] = pos
+  }
+
+  // Converte rank em quintil 1–5
+  return rank.map((r) => {
+    const quintil = Math.floor((r / n) * 5) + 1          // 1 a 5
+    const score   = Math.min(quintil, 5)                  // garante ≤ 5
+    return inverter ? 6 - score : score
+  })
 }
 
 // ── Mapeamento R × FV → Segmento ─────────────────────────────────────────────
@@ -108,7 +109,7 @@ function classificar(r: number, fv: number): PortalRfvSegment {
 export function computePortalRfv(entries: PortalRfvEntry[]): PortalClientRfv[] {
   if (entries.length === 0) return []
 
-  // Agrupa por cliente
+  // Agrupa por cliente (case-insensitive, sem espaços extras)
   const byCustomer = new Map<string, PortalRfvEntry[]>()
   for (const e of entries) {
     const key = e.customer_name.trim().toLowerCase()
@@ -116,60 +117,81 @@ export function computePortalRfv(entries: PortalRfvEntry[]): PortalClientRfv[] {
     byCustomer.get(key)!.push(e)
   }
 
-  // Data de referência = sempre hoje (independente dos dados importados)
-  const referenceDate = Date.now()
+  // Data de referência = MAX(purchase_date) de todo o dataset + 1 dia
+  // Garante que o cliente mais recente tenha recencyDays = 0 e não distorça os quintis
+  const maxDateStr = entries.reduce(
+    (max, e) => (e.purchase_date > max ? e.purchase_date : max),
+    entries[0].purchase_date
+  )
+  const referenceMs =
+    new Date(maxDateStr + "T00:00:00").getTime() + 86400000 // +1 dia em ms
 
-  // Passo 1: agregar R, F, V brutos por cliente
+  // Passo 1: agregar métricas brutas por cliente
   type Raw = {
     customerName: string
     entries: PortalRfvEntry[]
-    recencyDays: number
-    orderCount: number   // total de linhas/produtos comprados (não datas únicas)
-    totalValue: number
+    recencyDays: number      // referenceDate - última_compra (dias)
+    freqDias: number         // COUNT DISTINCT(purchase_date) — dias únicos com compra
+    totalValue: number       // SUM(value)
+    ticketMedio: number      // totalValue / freqDias
     lastPurchaseDate: string
     firstPurchaseDate: string
+    orderCount: number       // total de linhas (para exibição)
   }
 
   const rawList: Raw[] = Array.from(byCustomer.entries()).map(([, customerEntries]) => {
-    const customerName = customerEntries[0].customer_name.trim()
-    const sortedDates = [...customerEntries].map((e) => e.purchase_date).sort()
-    const orderCount = customerEntries.length                                    // total de produtos/linhas
-    const totalValue = customerEntries.reduce((s, e) => s + Number(e.value), 0)
-    const lastPurchaseDate = sortedDates[sortedDates.length - 1]
+    const customerName    = customerEntries[0].customer_name.trim()
+    const allDates        = customerEntries.map((e) => e.purchase_date)
+    const uniqueDates     = Array.from(new Set(allDates))                         // dias únicos
+    const sortedDates     = [...allDates].sort()
+    const lastPurchaseDate  = sortedDates[sortedDates.length - 1]
     const firstPurchaseDate = sortedDates[0]
-    const recencyDays = Math.round(
-      (referenceDate - new Date(lastPurchaseDate + "T00:00:00").getTime()) / 86400000
+    const totalValue      = customerEntries.reduce((s, e) => s + Number(e.value), 0)
+    const freqDias        = uniqueDates.length                                    // COUNT DISTINCT(data)
+    const ticketMedio     = freqDias > 0 ? totalValue / freqDias : 0             // valor_total / frequência
+    const recencyDays     = Math.round(
+      (referenceMs - new Date(lastPurchaseDate + "T00:00:00").getTime()) / 86400000
     )
-    return { customerName, entries: customerEntries, recencyDays, orderCount, totalValue, lastPurchaseDate, firstPurchaseDate }
+    return {
+      customerName, entries: customerEntries,
+      recencyDays, freqDias, totalValue, ticketMedio,
+      lastPurchaseDate, firstPurchaseDate,
+      orderCount: customerEntries.length,
+    }
   })
 
-  // Passo 2: arrays globais para quintis dinâmicos
-  const allRecencies = rawList.map((c) => c.recencyDays)
-  const allFreqs     = rawList.map((c) => c.orderCount)
-  const allValues    = rawList.map((c) => c.totalValue)
+  // Passo 2: arrays globais para quintis — ordem de aparição preservada (desempate por posição)
+  const allRecencies   = rawList.map((c) => c.recencyDays)
+  const allFreqs       = rawList.map((c) => c.freqDias)
+  const allTickets     = rawList.map((c) => c.ticketMedio)
 
-  // Passo 3: calcular scores e segmentar
-  return rawList.map((c) => {
-    const r  = scoreQuintis(c.recencyDays, allRecencies, true)  // menor dias → score maior
-    const f  = scoreQuintis(c.orderCount,  allFreqs,     false)
-    const v  = scoreQuintis(c.totalValue,  allValues,    false)
-    const fv = Math.round((f + v) / 2)
-    const score = Math.round(((r + f + v) / 3) * 10) / 10      // 1.0–5.0
+  // Calcula scores em lote (cada array retorna um score por índice)
+  const rScores = scoreQuintisArray(allRecencies, true)   // menor dias → score maior
+  const fScores = scoreQuintisArray(allFreqs,     false)  // maior freq  → score maior
+  const vScores = scoreQuintisArray(allTickets,   false)  // maior ticket → score maior
+
+  // Passo 3: montar resultado final
+  return rawList.map((c, i) => {
+    const r     = rScores[i]
+    const f     = fScores[i]
+    const v     = vScores[i]
+    const fv    = Math.round((f + v) / 2)
+    const score = Math.round(((r + f + v) / 3) * 10) / 10  // 1.0–5.0
 
     return {
-      customerName: c.customerName,
-      entries: c.entries,
-      recency: r,
-      frequency: f,
-      monetary: v,
+      customerName:     c.customerName,
+      entries:          c.entries,
+      recency:          r,
+      frequency:        f,
+      monetary:         v,
       fv,
       score,
-      segment: classificar(r, fv),
-      totalValue: c.totalValue,
+      segment:          classificar(r, fv),
+      totalValue:       c.totalValue,
       lastPurchaseDate: c.lastPurchaseDate,
       firstPurchaseDate: c.firstPurchaseDate,
-      recencyDays: c.recencyDays,
-      orderCount: c.orderCount,
+      recencyDays:      c.recencyDays,
+      orderCount:       c.orderCount,
     }
   })
 }
