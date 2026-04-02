@@ -633,8 +633,8 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
                               <td className="px-4 py-3 text-center text-muted-foreground">{c.frequency}</td>
                               <td className="px-4 py-3 text-center text-muted-foreground">{c.monetary}</td>
                               <td className="px-4 py-3 text-center">
-                                <span className={cn("font-bold", c.score >= 4.0 ? "text-emerald-600" : c.score >= 2.5 ? "text-amber-500" : "text-red-500")}>
-                                  {c.score.toFixed(1)}
+                                <span className={cn("font-bold", c.score >= 11 ? "text-emerald-600" : c.score >= 7 ? "text-amber-500" : "text-red-500")}>
+                                  {c.score}
                                 </span>
                               </td>
                               <td className="px-4 py-3 text-muted-foreground text-xs">
@@ -660,36 +660,34 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
             const colors = PORTAL_SEGMENT_COLORS[clientDetail.segment]
             const strategy = PORTAL_SEGMENT_STRATEGIES[clientDetail.segment]
 
-            // Gauge SVG helper — semi-círculo
-            const Gauge = ({ value, max = 5, color }: { value: number; max?: number; color: string }) => {
-              const pct = value / max
-              const r = 36
-              const cx = 48
-              const cy = 48
+            // Gauge SVG helper — semi-círculo. max=5 para R/F/V, max=15 para Score RFV
+            const Gauge = ({ value, max = 5, label: gaugeLabel }: { value: number; max?: number; label: string; color: string }) => {
+              const pct = Math.min(value / max, 1)
+              const r = 36, cx = 48, cy = 48
               const startAngle = Math.PI
-              const endAngle = 2 * Math.PI
-              const sweep = (endAngle - startAngle) * pct
+              const sweep = Math.PI * pct
               const x1 = cx + r * Math.cos(startAngle)
               const y1 = cy + r * Math.sin(startAngle)
               const x2 = cx + r * Math.cos(startAngle + sweep)
               const y2 = cy + r * Math.sin(startAngle + sweep)
               const largeArc = sweep > Math.PI ? 1 : 0
+              // Cor baseada na proporção (igual para todas as métricas)
+              const arcColor = pct >= 0.8 ? "#10B981" : pct >= 0.5 ? "#F59E0B" : pct >= 0.3 ? "#F97316" : "#EF4444"
               return (
                 <svg width="96" height="56" viewBox="0 0 96 56" aria-hidden="true">
                   <path
-                    d={`M ${cx + r * Math.cos(Math.PI)} ${cy + r * Math.sin(Math.PI)} A ${r} ${r} 0 1 1 ${cx + r} ${cy}`}
+                    d={`M ${cx + r * Math.cos(Math.PI)} ${cy} A ${r} ${r} 0 1 1 ${cx + r} ${cy}`}
                     fill="none" stroke="currentColor" strokeWidth="7"
-                    className="text-muted/30"
-                    strokeLinecap="round"
+                    className="text-muted/30" strokeLinecap="round"
                   />
                   {pct > 0 && (
                     <path
                       d={`M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2}`}
-                      fill="none" stroke={color} strokeWidth="7" strokeLinecap="round"
+                      fill="none" stroke={arcColor} strokeWidth="7" strokeLinecap="round"
                     />
                   )}
-                  <text x={cx} y={cy - 2} textAnchor="middle" fontSize="15" fontWeight="700" fill={color}>{value.toFixed(1)}</text>
-                  <text x={cx} y={cy + 13} textAnchor="middle" fontSize="9" fill="#94a3b8">de 5</text>
+                  <text x={cx} y={cy - 2} textAnchor="middle" fontSize="15" fontWeight="700" fill={arcColor}>{value}</text>
+                  <text x={cx} y={cy + 13} textAnchor="middle" fontSize="9" fill="#94a3b8">de {max}</text>
                 </svg>
               )
             }
@@ -723,13 +721,13 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
                   {/* Gauges de Score */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {[
-                      { label: "Recência",   value: clientDetail.recency,   color: "#3B82F6" },
-                      { label: "Frequência", value: clientDetail.frequency, color: "#10B981" },
-                      { label: "Monetário",  value: clientDetail.monetary,  color: "#F59E0B" },
-                      { label: "Score RFV",  value: clientDetail.score,     color: clientDetail.score >= 4 ? "#10B981" : clientDetail.score >= 2.5 ? "#F59E0B" : "#EF4444" },
-                    ].map(({ label, value, color }) => (
+                      { label: "Recência",   value: clientDetail.recency,   max: 5  },
+                      { label: "Frequência", value: clientDetail.frequency, max: 5  },
+                      { label: "Monetário",  value: clientDetail.monetary,  max: 5  },
+                      { label: "Score RFV",  value: clientDetail.score,     max: 15 },
+                    ].map(({ label, value, max }) => (
                       <div key={label} className="rounded-xl border border-border bg-card p-3 flex flex-col items-center gap-1">
-                        <Gauge value={value} color={color} />
+                        <Gauge value={value} max={max} label={label} color="" />
                         <p className="text-xs font-semibold text-foreground">{label}</p>
                       </div>
                     ))}
@@ -824,7 +822,7 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
         </DialogContent>
       </Dialog>
 
-      {/* ── PRODUTOS / SERVIÇOS ───────────────────────────────────────────────── */}
+      {/* ── PRODUTOS / SERVIÇOS ────────────────────���──────────────────────────── */}
       {activeTab === "produtos" && (
         <div className="space-y-4">
           <div className="flex justify-end">
@@ -953,7 +951,7 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
               <Input className="mt-1" value={productForm.category} onChange={(e) => setProductForm((f) => ({ ...f, category: e.target.value }))} placeholder="Ex: Serviço recorrente" />
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground">Descrição</label>
+              <label className="text-xs font-medium text-muted-foreground">Descri��ão</label>
               <Input className="mt-1" value={productForm.description} onChange={(e) => setProductForm((f) => ({ ...f, description: e.target.value }))} placeholder="Descrição curta" />
             </div>
             <div>

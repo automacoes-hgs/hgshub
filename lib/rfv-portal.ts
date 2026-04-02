@@ -31,7 +31,7 @@ export type PortalClientRfv = {
   frequency: number      // F_score 1–5
   monetary: number       // V_score 1–5
   fv: number             // FV = round((F+V)/2), 1–5
-  score: number          // média (R+F+V)/3 para exibição, 1.0–5.0
+  score: number          // soma R+F+V, escala 3–15
   segment: PortalRfvSegment
   totalValue: number
   lastPurchaseDate: string
@@ -176,7 +176,7 @@ export function computePortalRfv(entries: PortalRfvEntry[]): PortalClientRfv[] {
     const f     = fScores[i]
     const v     = vScores[i]
     const fv    = Math.round((f + v) / 2)
-    const score = Math.round(((r + f + v) / 3) * 10) / 10  // 1.0–5.0
+    const score = r + f + v  // soma 3–15
 
     return {
       customerName:     c.customerName,
