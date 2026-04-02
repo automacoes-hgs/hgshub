@@ -58,15 +58,16 @@ const EMPTY_PRODUCT: ProductForm = { name: "", description: "", category: "", pr
 
 // ─── Estratégias por segmento ────────────────────────────────────────────────
 const PORTAL_SEGMENT_STRATEGIES: Record<PortalRfvSegment, { title: string; priority: string; priorityColor: string; description: string }> = {
-  "Campeões":            { title: "Manter e Expandir",          priority: "Prioridade Alta",   priorityColor: "bg-emerald-100 text-emerald-700", description: "Cliente estratégico. Ofereça produtos premium, convites VIP e programas de fidelidade exclusivos." },
-  "Clientes Fiéis":      { title: "Aprofundar Relacionamento",   priority: "Prioridade Alta",   priorityColor: "bg-sky-100 text-sky-700",         description: "Cliente consistente. Apresente produtos complementares e benefícios de fidelidade." },
-  "Não Perder":          { title: "Retenção Urgente",            priority: "Prioridade Máxima", priorityColor: "bg-red-100 text-red-700",          description: "Cliente de alto valor em risco. Ação imediata: contato personalizado, oferta especial ou resgate de experiência." },
-  "Em Risco":            { title: "Reengajamento",               priority: "Prioridade Alta",   priorityColor: "bg-orange-100 text-orange-700",   description: "Sinal de desengajamento. Entre em contato com proposta de valor renovada antes que seja tarde." },
-  "Precisam de Atenção": { title: "Nutrir e Converter",          priority: "Prioridade Média",  priorityColor: "bg-amber-100 text-amber-700",     description: "Potencial não realizado. Invista em nutrição com conteúdo relevante e ofertas segmentadas." },
-  "Potenciais":          { title: "Converter em Fiel",           priority: "Prioridade Média",  priorityColor: "bg-blue-100 text-blue-700",       description: "Perfil promissor com compra recente. Apresente mais produtos e construa confiança com entregas de valor." },
-  "Prestes a Hibernar":  { title: "Reativação Preventiva",       priority: "Prioridade Média",  priorityColor: "bg-slate-100 text-slate-600",     description: "Risco de inatividade. Acione campanhas de retenção e benefícios exclusivos para recuperar o engajamento." },
-  "Hibernando":          { title: "Reativação",                  priority: "Baixa Prioridade",  priorityColor: "bg-slate-100 text-slate-500",     description: "Cliente inativo. Tente reativação com proposta diferenciada ou pesquisa de satisfação." },
-  "Perdidos":            { title: "Pesquisa e Reativação",       priority: "Baixa Prioridade",  priorityColor: "bg-zinc-100 text-zinc-500",       description: "Cliente sem compras recentes. Envie pesquisa de satisfação e oferta de retorno com desconto especial." },
+  "Campeões":              { title: "Manter e Expandir",         priority: "Prioridade Alta",   priorityColor: "bg-emerald-100 text-emerald-700", description: "Cliente estratégico. Ofereça produtos premium, convites VIP e programas de fidelidade exclusivos." },
+  "Clientes Fiéis":        { title: "Aprofundar Relacionamento", priority: "Prioridade Alta",   priorityColor: "bg-green-100 text-green-700",     description: "Cliente consistente. Apresente produtos complementares e benefícios de fidelidade crescentes." },
+  "Quase Campeões":        { title: "Elevar para Campeão",       priority: "Prioridade Alta",   priorityColor: "bg-teal-100 text-teal-700",       description: "Cliente recente com score alto. Um impulso de frequência ou valor pode elevar a Campeão." },
+  "Potencial de Lealdade": { title: "Converter em Fiel",         priority: "Prioridade Média",  priorityColor: "bg-sky-100 text-sky-700",         description: "Engajado mas ainda não consistente. Com a ação certa e boa nutrição, pode subir de categoria rapidamente." },
+  "Novos Clientes":        { title: "Ativar e Engajar",          priority: "Prioridade Média",  priorityColor: "bg-blue-100 text-blue-700",       description: "Comprou recentemente mas ainda tem baixa frequência. Apresente novos produtos e construa a relação." },
+  "Em Risco (Alto Valor)": { title: "Retenção Urgente",          priority: "Prioridade Máxima", priorityColor: "bg-red-100 text-red-700",         description: "Era um ótimo cliente e sumiu. Ação imediata: contato personalizado, oferta especial ou resgate de experiência." },
+  "Em Risco":              { title: "Reengajamento",             priority: "Prioridade Alta",   priorityColor: "bg-orange-100 text-orange-700",   description: "Sinal claro de desengajamento. Entre em contato com proposta de valor renovada antes que seja tarde." },
+  "Perdidos Fiéis":        { title: "Reativação Prioritária",    priority: "Prioridade Alta",   priorityColor: "bg-amber-100 text-amber-700",     description: "Era frequente mas faz muito tempo que não aparece. Vale o investimento em campanha de recuperação personalizada." },
+  "Perdidos":              { title: "Pesquisa e Reativação",     priority: "Baixa Prioridade",  priorityColor: "bg-zinc-100 text-zinc-500",       description: "Nunca foi muito engajado e sumiu. Envie pesquisa de satisfação e oferta de retorno com desconto especial." },
+  "Precisam de Atenção":   { title: "Nutrir e Converter",        priority: "Prioridade Média",  priorityColor: "bg-slate-100 text-slate-600",     description: "Comportamento misto. Invista em nutrição com conteúdo relevante e ofertas segmentadas para ativar o potencial." },
 }
 
 // ─── Componente principal ────────────────────────────────────────────────────
@@ -177,8 +178,10 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
   const avgTicket = rfvClients.length ? totalRevenue / rfvClients.length : 0
   const champions = rfvClients.filter((c) => c.segment === "Campeões").length
   const atRisk = rfvClients.filter((c) =>
-    c.segment === "Em Risco" || c.segment === "Hibernando" ||
-    c.segment === "Não Perder" || c.segment === "Prestes a Hibernar" || c.segment === "Perdidos"
+    c.segment === "Em Risco" ||
+    c.segment === "Em Risco (Alto Valor)" ||
+    c.segment === "Perdidos Fiéis" ||
+    c.segment === "Perdidos"
   ).length
 
   // Dados para gráficos
@@ -371,7 +374,7 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
                   { label: "Ticket Médio", value: fmtValue(avgTicket), sub: "por cliente", icon: TrendingUp, bg: "bg-slate-50", color: "text-slate-600" },
                   { label: "Campeões", value: String(champions), sub: "clientes top", icon: Star, bg: "bg-emerald-50", color: "text-emerald-600" },
                   { label: "Em Risco / Hibernando", value: String(atRisk), sub: `${rfvClients.length ? Math.round((atRisk / rfvClients.length) * 100) : 0}% da base`, icon: AlertTriangle, bg: "bg-red-50", color: "text-red-500" },
-                  { label: "Potencial Upsell", value: String(rfvClients.filter((c) => ["Campeões","Clientes Fiéis","Potenciais"].includes(c.segment)).length), sub: "elegíveis", icon: ArrowUpRight, bg: "bg-violet-50", color: "text-violet-600" },
+                  { label: "Potencial Upsell", value: String(rfvClients.filter((c) => ["Campeões","Clientes Fiéis","Quase Campeões","Potencial de Lealdade"].includes(c.segment)).length), sub: "elegíveis", icon: ArrowUpRight, bg: "bg-violet-50", color: "text-violet-600" },
                   { label: "Clientes Ativos", value: `${rfvClients.length ? Math.round((rfvClients.filter((c) => c.recency >= 4).length / rfvClients.length) * 100) : 0}%`, sub: `${rfvClients.filter((c) => c.recency >= 4).length} clientes`, icon: UserCheck, bg: "bg-emerald-50", color: "text-emerald-600" },
                   { label: "Janela de Recompra", value: String(rfvClients.filter((c) => c.recencyDays >= 60 && c.recencyDays <= 90).length), sub: "compraram há 60–90 dias", icon: Target, bg: "bg-amber-50", color: "text-amber-600" },
                 ].map((card) => (
@@ -633,8 +636,8 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
                               <td className="px-4 py-3 text-center text-muted-foreground">{c.frequency}</td>
                               <td className="px-4 py-3 text-center text-muted-foreground">{c.monetary}</td>
                               <td className="px-4 py-3 text-center">
-                                <span className={cn("font-bold", c.score >= 4.0 ? "text-emerald-600" : c.score >= 2.5 ? "text-amber-500" : "text-red-500")}>
-                                  {c.score.toFixed(1)}
+                                <span className={cn("font-bold", c.score >= 11 ? "text-emerald-600" : c.score >= 7 ? "text-amber-500" : "text-red-500")}>
+                                  {c.score}
                                 </span>
                               </td>
                               <td className="px-4 py-3 text-muted-foreground text-xs">
@@ -660,36 +663,34 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
             const colors = PORTAL_SEGMENT_COLORS[clientDetail.segment]
             const strategy = PORTAL_SEGMENT_STRATEGIES[clientDetail.segment]
 
-            // Gauge SVG helper — semi-círculo
-            const Gauge = ({ value, max = 5, color }: { value: number; max?: number; color: string }) => {
-              const pct = value / max
-              const r = 36
-              const cx = 48
-              const cy = 48
+            // Gauge SVG helper — semi-círculo. max=5 para R/F/V, max=15 para Score RFV
+            const Gauge = ({ value, max = 5, label: gaugeLabel }: { value: number; max?: number; label: string; color: string }) => {
+              const pct = Math.min(value / max, 1)
+              const r = 36, cx = 48, cy = 48
               const startAngle = Math.PI
-              const endAngle = 2 * Math.PI
-              const sweep = (endAngle - startAngle) * pct
+              const sweep = Math.PI * pct
               const x1 = cx + r * Math.cos(startAngle)
               const y1 = cy + r * Math.sin(startAngle)
               const x2 = cx + r * Math.cos(startAngle + sweep)
               const y2 = cy + r * Math.sin(startAngle + sweep)
               const largeArc = sweep > Math.PI ? 1 : 0
+              // Cor baseada na proporção (igual para todas as métricas)
+              const arcColor = pct >= 0.8 ? "#10B981" : pct >= 0.5 ? "#F59E0B" : pct >= 0.3 ? "#F97316" : "#EF4444"
               return (
                 <svg width="96" height="56" viewBox="0 0 96 56" aria-hidden="true">
                   <path
-                    d={`M ${cx + r * Math.cos(Math.PI)} ${cy + r * Math.sin(Math.PI)} A ${r} ${r} 0 1 1 ${cx + r} ${cy}`}
+                    d={`M ${cx + r * Math.cos(Math.PI)} ${cy} A ${r} ${r} 0 1 1 ${cx + r} ${cy}`}
                     fill="none" stroke="currentColor" strokeWidth="7"
-                    className="text-muted/30"
-                    strokeLinecap="round"
+                    className="text-muted/30" strokeLinecap="round"
                   />
                   {pct > 0 && (
                     <path
                       d={`M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2}`}
-                      fill="none" stroke={color} strokeWidth="7" strokeLinecap="round"
+                      fill="none" stroke={arcColor} strokeWidth="7" strokeLinecap="round"
                     />
                   )}
-                  <text x={cx} y={cy - 2} textAnchor="middle" fontSize="15" fontWeight="700" fill={color}>{value.toFixed(1)}</text>
-                  <text x={cx} y={cy + 13} textAnchor="middle" fontSize="9" fill="#94a3b8">de 5</text>
+                  <text x={cx} y={cy - 2} textAnchor="middle" fontSize="15" fontWeight="700" fill={arcColor}>{value}</text>
+                  <text x={cx} y={cy + 13} textAnchor="middle" fontSize="9" fill="#94a3b8">de {max}</text>
                 </svg>
               )
             }
@@ -723,13 +724,13 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
                   {/* Gauges de Score */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {[
-                      { label: "Recência",   value: clientDetail.recency,   color: "#3B82F6" },
-                      { label: "Frequência", value: clientDetail.frequency, color: "#10B981" },
-                      { label: "Monetário",  value: clientDetail.monetary,  color: "#F59E0B" },
-                      { label: "Score RFV",  value: clientDetail.score,     color: clientDetail.score >= 4 ? "#10B981" : clientDetail.score >= 2.5 ? "#F59E0B" : "#EF4444" },
-                    ].map(({ label, value, color }) => (
+                      { label: "Recência",   value: clientDetail.recency,   max: 5  },
+                      { label: "Frequência", value: clientDetail.frequency, max: 5  },
+                      { label: "Monetário",  value: clientDetail.monetary,  max: 5  },
+                      { label: "Score RFV",  value: clientDetail.score,     max: 15 },
+                    ].map(({ label, value, max }) => (
                       <div key={label} className="rounded-xl border border-border bg-card p-3 flex flex-col items-center gap-1">
-                        <Gauge value={value} color={color} />
+                        <Gauge value={value} max={max} label={label} color="" />
                         <p className="text-xs font-semibold text-foreground">{label}</p>
                       </div>
                     ))}
@@ -824,7 +825,7 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
         </DialogContent>
       </Dialog>
 
-      {/* ── PRODUTOS / SERVIÇOS ───────────────────────────────────────────────── */}
+      {/* ── PRODUTOS / SERVIÇOS ────────────────────���──────────────────────────── */}
       {activeTab === "produtos" && (
         <div className="space-y-4">
           <div className="flex justify-end">
@@ -953,7 +954,7 @@ export function PortalRfvClient({ ownerId, entries: initialEntries, products: in
               <Input className="mt-1" value={productForm.category} onChange={(e) => setProductForm((f) => ({ ...f, category: e.target.value }))} placeholder="Ex: Serviço recorrente" />
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground">Descrição</label>
+              <label className="text-xs font-medium text-muted-foreground">Descri��ão</label>
               <Input className="mt-1" value={productForm.description} onChange={(e) => setProductForm((f) => ({ ...f, description: e.target.value }))} placeholder="Descrição curta" />
             </div>
             <div>
