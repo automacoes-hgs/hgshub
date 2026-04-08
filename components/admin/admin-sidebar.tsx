@@ -24,6 +24,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: "Dashboard Geral", href: "/admin/dashboard", icon: LayoutDashboard },
+  { label: "Empresas", href: "/admin/companies", icon: Briefcase },
   { label: "Clientes", href: "/admin/clients", icon: Building2 },
   { label: "Qualidade", href: "/admin/quality", icon: HeartPulse },
   { label: "Análise RFV", href: "/admin/rfv", icon: PieChart },
