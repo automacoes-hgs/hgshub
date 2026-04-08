@@ -306,6 +306,7 @@ export function CompaniesClient({ initialCompanies }: CompaniesClientProps) {
     const overallPct = goalProgress(totalMeta, totalResultado)
 
     return (
+      <>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -450,12 +451,170 @@ export function CompaniesClient({ initialCompanies }: CompaniesClientProps) {
           </Card>
         )}
       </div>
+
+      {/* ── Diálogos (renderizados quando em vista de empresa) ─────────────── */}
+      <Dialog open={goalModal} onOpenChange={setGoalModal}>
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editingGoalId ? "Editar Meta" : "Nova Meta"}</DialogTitle>
+            <DialogDescription>
+              Configure os valores de meta e resultado para o período selecionado.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4 py-2">
+            {/* Ano */}
+            <div className="flex flex-col gap-1.5">
+              <Label>Ano *</Label>
+              <Select
+                value={String(goalForm.ano)}
+                onValueChange={(v) => setGoalForm((f) => ({ ...f, ano: Number(v) }))}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {YEARS.map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Mês */}
+            <div className="flex flex-col gap-1.5">
+              <Label>Mês (opcional)</Label>
+              <Select
+                value={goalForm.mes ? String(goalForm.mes) : "all"}
+                onValueChange={(v) => setGoalForm((f) => ({ ...f, mes: v === "all" ? null : Number(v) }))}
+              >
+                <SelectTrigger><SelectValue placeholder="Todos os meses" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os meses (anual)</SelectItem>
+                  {MONTH_NAMES.map((m, i) => <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Unidade */}
+            <div className="flex flex-col gap-1.5">
+              <Label>Unidade (filial)</Label>
+              <Input
+                value={goalForm.unidade ?? ""}
+                onChange={(e) => setGoalForm((f) => ({ ...f, unidade: e.target.value }))}
+                placeholder="Ex: SP, RJ, Matriz..."
+              />
+            </div>
+
+            {/* Tipo de Receita */}
+            <div className="flex flex-col gap-1.5">
+              <Label>Tipo de Receita</Label>
+              <Select
+                value={goalForm.tipo_receita ?? "none"}
+                onValueChange={(v) => setGoalForm((f) => ({ ...f, tipo_receita: v === "none" ? null : v as "MRR" | "MRU" }))}
+              >
+                <SelectTrigger><SelectValue placeholder="Selecionar tipo" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Não especificado</SelectItem>
+                  <SelectItem value="MRR">MRR — Receita Recorrente Mensal</SelectItem>
+                  <SelectItem value="MRU">MRU — Receita Única Mensal</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Categoria */}
+            <div className="col-span-2 flex flex-col gap-1.5">
+              <Label>Categoria (produto/serviço)</Label>
+              <Input
+                value={goalForm.categoria ?? ""}
+                onChange={(e) => setGoalForm((f) => ({ ...f, categoria: e.target.value }))}
+                placeholder="Ex: Assessoria, BPO RH, Treinamento..."
+              />
+            </div>
+
+            {/* Valor Meta */}
+            <div className="flex flex-col gap-1.5">
+              <Label>Valor Meta (R$) *</Label>
+              <Input
+                type="number"
+                value={goalForm.valor_meta}
+                onChange={(e) => setGoalForm((f) => ({ ...f, valor_meta: Number(e.target.value) }))}
+                placeholder="0.00"
+              />
+            </div>
+
+            {/* Resultado */}
+            <div className="flex flex-col gap-1.5">
+              <Label>Resultado até agora (R$)</Label>
+              <Input
+                type="number"
+                value={goalForm.resultado}
+                onChange={(e) => setGoalForm((f) => ({ ...f, resultado: Number(e.target.value) }))}
+                placeholder="0.00"
+              />
+            </div>
+
+            {/* Meta Clientes */}
+            <div className="flex flex-col gap-1.5">
+              <Label>Meta de Clientes (opcional)</Label>
+              <Input
+                type="number"
+                value={goalForm.meta_clientes ?? ""}
+                onChange={(e) => setGoalForm((f) => ({ ...f, meta_clientes: e.target.value ? Number(e.target.value) : null }))}
+                placeholder="Quantidade de clientes"
+              />
+            </div>
+
+            {/* Ticket Médio */}
+            <div className="flex flex-col gap-1.5">
+              <Label>Ticket Médio (R$, opcional)</Label>
+              <Input
+                type="number"
+                value={goalForm.ticket_medio ?? ""}
+                onChange={(e) => setGoalForm((f) => ({ ...f, ticket_medio: e.target.value ? Number(e.target.value) : null }))}
+                placeholder="Valor médio por cliente"
+              />
+            </div>
+
+            {/* Observações */}
+            <div className="col-span-2 flex flex-col gap-1.5">
+              <Label>Observações</Label>
+              <Textarea
+                value={goalForm.observacoes ?? ""}
+                onChange={(e) => setGoalForm((f) => ({ ...f, observacoes: e.target.value }))}
+                placeholder="Anotações importantes sobre esta meta..."
+                rows={2}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setGoalModal(false)}>Cancelar</Button>
+            <Button onClick={handleSaveGoal} disabled={savingGoal}>
+              {savingGoal ? "Salvando..." : editingGoalId ? "Salvar alterações" : "Criar meta"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Modal: Confirmação de Deleção de Meta ──────────────────────────── */}
+      <Dialog open={!!deleteGoalId} onOpenChange={(open) => { if (!open) setDeleteGoalId(null) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Excluir meta</DialogTitle>
+            <DialogDescription>Esta ação é irreversível.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteGoalId(null)}>Cancelar</Button>
+            <Button variant="destructive" onClick={handleDeleteGoal} disabled={deleting}>
+              {deleting ? "Excluindo..." : "Excluir"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      </>
     )
   }
 
   // ── Render: Lista de Empresas ──────────────────────────────────────────
 
   return (
+    <>
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3">
         <div>
@@ -579,179 +738,6 @@ export function CompaniesClient({ initialCompanies }: CompaniesClientProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* ── Modal: Meta ───────────────────────────────────────────────────── */}
-      <Dialog open={goalModal} onOpenChange={setGoalModal}>
-        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editingGoalId ? "Editar Meta" : "Nova Meta"}</DialogTitle>
-            <DialogDescription>
-              Configure os valores de meta e resultado para o período selecionado.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid grid-cols-2 gap-4 py-2">
-            {/* Ano */}
-            <div className="flex flex-col gap-1.5">
-              <Label>Ano *</Label>
-              <Select
-                value={String(goalForm.ano)}
-                onValueChange={(v) => setGoalForm((f) => ({ ...f, ano: Number(v) }))}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {YEARS.map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Mês */}
-            <div className="flex flex-col gap-1.5">
-              <Label>Mês (opcional)</Label>
-              <Select
-                value={goalForm.mes ? String(goalForm.mes) : "all"}
-                onValueChange={(v) => setGoalForm((f) => ({ ...f, mes: v === "all" ? null : Number(v) }))}
-              >
-                <SelectTrigger><SelectValue placeholder="Todos os meses" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos os meses (anual)</SelectItem>
-                  {MONTH_NAMES.map((m, i) => <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Unidade */}
-            <div className="flex flex-col gap-1.5">
-              <Label>Unidade (filial)</Label>
-              <Input
-                value={goalForm.unidade ?? ""}
-                onChange={(e) => setGoalForm((f) => ({ ...f, unidade: e.target.value }))}
-                placeholder="Ex: SP, RJ, Matriz..."
-              />
-            </div>
-
-            {/* Tipo de Receita */}
-            <div className="flex flex-col gap-1.5">
-              <Label>Tipo de Receita</Label>
-              <Select
-                value={goalForm.tipo_receita ?? "none"}
-                onValueChange={(v) => setGoalForm((f) => ({ ...f, tipo_receita: v === "none" ? null : v as "MRR" | "MRU" }))}
-              >
-                <SelectTrigger><SelectValue placeholder="Selecionar tipo" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Não especificado</SelectItem>
-                  <SelectItem value="MRR">MRR — Receita Recorrente Mensal</SelectItem>
-                  <SelectItem value="MRU">MRU — Receita Única Mensal</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Categoria */}
-            <div className="col-span-2 flex flex-col gap-1.5">
-              <Label>Categoria (produto/serviço)</Label>
-              <Input
-                value={goalForm.categoria ?? ""}
-                onChange={(e) => setGoalForm((f) => ({ ...f, categoria: e.target.value }))}
-                placeholder="Ex: Assessoria, BPO RH, Treinamento..."
-              />
-            </div>
-
-            {/* Valor Meta */}
-            <div className="flex flex-col gap-1.5">
-              <Label>Valor da Meta (R$) *</Label>
-              <Input
-                type="number" min="0" step="0.01"
-                value={goalForm.valor_meta}
-                onChange={(e) => setGoalForm((f) => ({ ...f, valor_meta: Number(e.target.value) }))}
-                placeholder="0,00"
-              />
-            </div>
-
-            {/* Resultado */}
-            <div className="flex flex-col gap-1.5">
-              <Label>Resultado Atual (R$)</Label>
-              <Input
-                type="number" min="0" step="0.01"
-                value={goalForm.resultado}
-                onChange={(e) => setGoalForm((f) => ({ ...f, resultado: Number(e.target.value) }))}
-                placeholder="0,00"
-              />
-            </div>
-
-            {/* Meta Clientes */}
-            <div className="flex flex-col gap-1.5">
-              <Label>Meta de Clientes</Label>
-              <Input
-                type="number" min="0"
-                value={goalForm.meta_clientes ?? ""}
-                onChange={(e) => setGoalForm((f) => ({ ...f, meta_clientes: e.target.value ? Number(e.target.value) : null }))}
-                placeholder="Opcional"
-              />
-            </div>
-
-            {/* Ticket Médio */}
-            <div className="flex flex-col gap-1.5">
-              <Label>Ticket Médio (R$)</Label>
-              <Input
-                type="number" min="0" step="0.01"
-                value={goalForm.ticket_medio ?? ""}
-                onChange={(e) => setGoalForm((f) => ({ ...f, ticket_medio: e.target.value ? Number(e.target.value) : null }))}
-                placeholder="Opcional"
-              />
-            </div>
-
-            {/* Observações */}
-            <div className="col-span-2 flex flex-col gap-1.5">
-              <Label>Observações</Label>
-              <Textarea
-                value={goalForm.observacoes ?? ""}
-                onChange={(e) => setGoalForm((f) => ({ ...f, observacoes: e.target.value }))}
-                placeholder="Anotações relevantes sobre esta meta..."
-                rows={3}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setGoalModal(false)}>Cancelar</Button>
-            <Button onClick={handleSaveGoal} disabled={savingGoal}>
-              {savingGoal ? "Salvando..." : editingGoalId ? "Salvar alterações" : "Criar meta"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Confirmar deleção empresa ────────────────────────────────────── */}
-      <Dialog open={!!deleteCompanyId} onOpenChange={(o) => { if (!o) setDeleteCompanyId(null) }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Excluir empresa</DialogTitle>
-            <DialogDescription>
-              Esta ação é irreversível. Todas as metas associadas também serão excluídas.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteCompanyId(null)}>Cancelar</Button>
-            <Button variant="destructive" onClick={handleDeleteCompany} disabled={deleting}>
-              {deleting ? "Excluindo..." : "Excluir"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Confirmar deleção meta ───────────────────────────────────────── */}
-      <Dialog open={!!deleteGoalId} onOpenChange={(o) => { if (!o) setDeleteGoalId(null) }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Excluir meta</DialogTitle>
-            <DialogDescription>Esta ação é irreversível.</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteGoalId(null)}>Cancelar</Button>
-            <Button variant="destructive" onClick={handleDeleteGoal} disabled={deleting}>
-              {deleting ? "Excluindo..." : "Excluir"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+    </>
   )
 }
