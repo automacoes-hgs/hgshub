@@ -738,6 +738,7 @@ export function CompaniesClient({ initialCompanies }: CompaniesClientProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
     </>
   )
 }
