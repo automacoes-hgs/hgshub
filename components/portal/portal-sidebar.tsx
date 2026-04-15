@@ -13,6 +13,7 @@ import {
   LogOut,
   ChevronRight,
   Lock,
+  BarChart3,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 

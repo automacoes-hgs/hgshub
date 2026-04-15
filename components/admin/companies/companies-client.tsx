@@ -4,6 +4,7 @@ import { useState, useTransition } from "react"
 import {
   Plus, Pencil, Trash2, Target, Building2, ChevronRight,
   ArrowLeft, TrendingUp, TrendingDown, Minus, Download,
+  Users, UserPlus, UserMinus, ExternalLink,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -18,7 +19,8 @@ import { cn } from "@/lib/utils"
 import {
   createCompany, updateCompany, deleteCompany,
   createGoal, updateGoal, deleteGoal, getGoalsByCompany,
-  type CompanyFormData, type GoalFormData,
+  getCompanyUsers, addCompanyUser, removeCompanyUser, getAllProfiles,
+  type CompanyFormData, type GoalFormData, type CompanyUser,
 } from "@/app/admin/companies/actions"
 
 // ── Tipos ──────────────────────────────────────────────────────────────────
@@ -45,6 +47,13 @@ type Goal = {
   meta_clientes: number | null
   ticket_medio: number | null
   observacoes: string | null
+}
+
+type Profile = {
+  id: string
+  email: string
+  full_name: string | null
+  is_admin: boolean
 }
 
 // ── Constantes ─────────────────────────────────────────────────────────────
@@ -116,6 +125,16 @@ export function CompaniesClient({ initialCompanies }: CompaniesClientProps) {
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null)
   const [savingGoal, setSavingGoal] = useState(false)
 
+  // ── Aba ativa na vista de empresa
+  const [activeTab, setActiveTab] = useState<"metas" | "responsaveis">("metas")
+
+  // ── Responsáveis
+  const [companyUsers, setCompanyUsers] = useState<CompanyUser[]>([])
+  const [allProfiles, setAllProfiles] = useState<Profile[]>([])
+  const [loadingUsers, setLoadingUsers] = useState(false)
+  const [addingUser, setAddingUser] = useState(false)
+  const [selectedUserId, setSelectedUserId] = useState<string>("")
+
   // ── Confirmar deleção
   const [deleteCompanyId, setDeleteCompanyId] = useState<string | null>(null)
   const [deleteGoalId, setDeleteGoalId] = useState<string | null>(null)
@@ -125,19 +144,60 @@ export function CompaniesClient({ initialCompanies }: CompaniesClientProps) {
 
   async function openCompanyView(company: Company) {
     setSelectedCompany(company)
+    setActiveTab("metas")
     setLoadingGoals(true)
-    const result = await getGoalsByCompany(company.id)
+    const [goalsRes] = await Promise.all([
+      getGoalsByCompany(company.id),
+      loadResponsaveis(company.id),
+    ])
     setLoadingGoals(false)
-    if (result.error || !result.data) {
-      toast({ title: "Erro ao carregar metas", description: result.error ?? "", variant: "destructive" })
+    if (goalsRes.error || !goalsRes.data) {
+      toast({ title: "Erro ao carregar metas", description: goalsRes.error ?? "", variant: "destructive" })
       return
     }
-    setGoals(result.data as Goal[])
+    setGoals(goalsRes.data as Goal[])
   }
 
   function backToList() {
     setSelectedCompany(null)
     setGoals([])
+    setCompanyUsers([])
+    setActiveTab("metas")
+  }
+
+  async function loadResponsaveis(companyId: string) {
+    setLoadingUsers(true)
+    const [usersRes, profilesRes] = await Promise.all([
+      getCompanyUsers(companyId),
+      getAllProfiles(),
+    ])
+    setLoadingUsers(false)
+    if (usersRes.data) setCompanyUsers(usersRes.data)
+    if (profilesRes.data) setAllProfiles(profilesRes.data)
+  }
+
+  async function handleAddUser() {
+    if (!selectedCompany || !selectedUserId) return
+    setAddingUser(true)
+    const result = await addCompanyUser(selectedCompany.id, selectedUserId)
+    setAddingUser(false)
+    if (result.error) {
+      toast({ title: "Erro ao adicionar responsável", description: result.error, variant: "destructive" })
+      return
+    }
+    toast({ title: "Responsável adicionado" })
+    setSelectedUserId("")
+    await loadResponsaveis(selectedCompany.id)
+  }
+
+  async function handleRemoveUser(companyUserId: string) {
+    const result = await removeCompanyUser(companyUserId)
+    if (result.error) {
+      toast({ title: "Erro ao remover responsável", description: result.error, variant: "destructive" })
+      return
+    }
+    toast({ title: "Responsável removido" })
+    setCompanyUsers((prev) => prev.filter((u) => u.id !== companyUserId))
   }
 
   // ── CRUD Empresa ───────────────────────────────────────────────────────
@@ -325,19 +385,159 @@ export function CompaniesClient({ initialCompanies }: CompaniesClientProps) {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={exportTemplateCSV} className="gap-2">
-              <Download className="h-4 w-4" /> Modelo CSV
-            </Button>
-            {goals.length > 0 && (
-              <Button variant="outline" size="sm" onClick={exportCSV} className="gap-2">
-                <Download className="h-4 w-4" /> Exportar Metas
-              </Button>
+            {activeTab === "metas" && (
+              <>
+                <Button variant="outline" size="sm" onClick={exportTemplateCSV} className="gap-2">
+                  <Download className="h-4 w-4" /> Modelo CSV
+                </Button>
+                {goals.length > 0 && (
+                  <Button variant="outline" size="sm" onClick={exportCSV} className="gap-2">
+                    <Download className="h-4 w-4" /> Exportar Metas
+                  </Button>
+                )}
+                <Button size="sm" onClick={openNewGoal} className="gap-2">
+                  <Plus className="h-4 w-4" /> Nova Meta
+                </Button>
+              </>
             )}
-            <Button size="sm" onClick={openNewGoal} className="gap-2">
-              <Plus className="h-4 w-4" /> Nova Meta
-            </Button>
           </div>
         </div>
+
+        {/* Abas */}
+        <div className="flex gap-1 border-b border-border">
+          {(["metas", "responsaveis"] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors",
+                activeTab === tab
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
+              )}
+            >
+              {tab === "metas" ? (
+                <><Target className="h-3.5 w-3.5" /> Metas</>
+              ) : (
+                <><Users className="h-3.5 w-3.5" /> Responsáveis
+                  {companyUsers.length > 0 && (
+                    <span className="ml-1 bg-muted text-muted-foreground text-[10px] font-semibold rounded-full px-1.5 py-0.5 leading-none">
+                      {companyUsers.length}
+                    </span>
+                  )}
+                </>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* ── Aba: Responsáveis ──────────────────────────────────────────── */}
+        {activeTab === "responsaveis" && (
+          <div className="space-y-5">
+            {/* Adicionar responsável */}
+            <Card className="border-border bg-card">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-semibold">Adicionar responsável</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-end gap-3">
+                  <div className="flex-1 flex flex-col gap-1.5">
+                    <Label className="text-xs">Selecionar usuário</Label>
+                    <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Escolha um usuário..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {allProfiles
+                          .filter((p) => !companyUsers.some((cu) => cu.user_id === p.id))
+                          .map((p) => (
+                            <SelectItem key={p.id} value={p.id}>
+                              {p.full_name ? `${p.full_name} (${p.email})` : p.email}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={handleAddUser}
+                    disabled={!selectedUserId || addingUser}
+                    className="gap-2"
+                  >
+                    <UserPlus className="h-4 w-4" />
+                    {addingUser ? "Adicionando..." : "Adicionar"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Lista de responsáveis */}
+            {loadingUsers ? (
+              <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">
+                Carregando responsáveis...
+              </div>
+            ) : companyUsers.length === 0 ? (
+              <Card className="border-border bg-card">
+                <CardContent className="py-14 flex flex-col items-center gap-3 text-center">
+                  <Users className="h-10 w-10 text-muted-foreground/30" />
+                  <p className="text-sm font-medium text-muted-foreground">
+                    Nenhum responsável vinculado a esta empresa.
+                  </p>
+                  <p className="text-xs text-muted-foreground/70 max-w-xs">
+                    Adicione usuários acima para que eles possam visualizar o dashboard de metas no portal.
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card className="border-border">
+                <CardContent className="p-0">
+                  <ul className="divide-y divide-border">
+                    {companyUsers.map((cu) => {
+                      const profile = cu.profiles
+                      return (
+                        <li key={cu.id} className="flex items-center justify-between gap-3 px-5 py-3.5">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground shrink-0">
+                              {(profile?.full_name ?? profile?.email ?? "?")[0].toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              {profile?.full_name && (
+                                <p className="text-sm font-medium text-foreground truncate">{profile.full_name}</p>
+                              )}
+                              <p className="text-xs text-muted-foreground truncate">{profile?.email}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <a
+                              href={`/portal/company-goals`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 transition-colors"
+                            >
+                              <ExternalLink className="h-3.5 w-3.5" />
+                              Dashboard
+                            </a>
+                            <button
+                              onClick={() => handleRemoveUser(cu.id)}
+                              className="text-muted-foreground hover:text-destructive transition-colors p-1 rounded"
+                              title="Remover responsável"
+                            >
+                              <UserMinus className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        )}
+
+        {/* ── Aba: Metas ─────────────────────────────────────────────────── */}
+        {activeTab === "metas" && (
+        <div>
 
         {/* KPIs */}
         {goals.length > 0 && (
@@ -449,6 +649,8 @@ export function CompaniesClient({ initialCompanies }: CompaniesClientProps) {
               </div>
             </CardContent>
           </Card>
+        )}
+        </div>
         )}
       </div>
 

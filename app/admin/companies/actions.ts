@@ -164,3 +164,95 @@ export async function deleteGoal(id: string) {
   revalidatePath("/admin/companies")
   return { success: true }
 }
+
+// ── Company Users (Responsáveis) Actions ──────────────────────────────────
+
+export type CompanyUser = {
+  id: string
+  company_id: string
+  user_id: string
+  created_at: string
+  profiles: {
+    id: string
+    email: string
+    full_name: string | null
+    is_admin: boolean
+  }
+}
+
+export async function getCompanyUsers(companyId: string) {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("company_users")
+    .select("*, profiles(id, email, full_name, is_admin)")
+    .eq("company_id", companyId)
+    .order("created_at")
+  if (error) return { error: error.message, data: null }
+  return { data: data as CompanyUser[], error: null }
+}
+
+export async function addCompanyUser(companyId: string, userId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: "Não autenticado" }
+
+  const { error } = await supabase.from("company_users").insert({
+    company_id: companyId,
+    user_id: userId,
+  })
+  if (error) return { error: error.message }
+  revalidatePath("/admin/companies")
+  return { success: true }
+}
+
+export async function removeCompanyUser(companyUserId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: "Não autenticado" }
+
+  const { error } = await supabase.from("company_users").delete().eq("id", companyUserId)
+  if (error) return { error: error.message }
+  revalidatePath("/admin/companies")
+  return { success: true }
+}
+
+export async function getAllProfiles() {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, email, full_name, is_admin")
+    .eq("is_admin", false)
+    .order("email")
+  if (error) return { error: error.message, data: null }
+  return { data, error: null }
+}
+
+// ── Portal: metas por usuário responsável ─────────────────────────────────
+
+export async function getMyCompanyGoals() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: "Não autenticado", data: null }
+
+  // Busca todas as vinculações do usuário + metas da empresa
+  const { data, error } = await supabase
+    .from("company_users")
+    .select(`
+      company_id,
+      companies (
+        id,
+        name,
+        slug,
+        description,
+        company_goals (
+          id, unidade, tipo_receita, ano, mes,
+          categoria, valor_meta, resultado,
+          meta_clientes, ticket_medio, observacoes
+        )
+      )
+    `)
+    .eq("user_id", user.id)
+
+  if (error) return { error: error.message, data: null }
+  return { data, error: null }
+}
